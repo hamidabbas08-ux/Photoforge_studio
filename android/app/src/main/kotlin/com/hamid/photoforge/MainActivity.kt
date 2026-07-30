@@ -1,4 +1,4 @@
-package com.hamid.photoforge_studio
+package com.hamid.photoforge
 
 import io.flutter.embedding.android.FlutterActivity
 
