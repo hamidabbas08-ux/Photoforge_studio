@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -20,14 +21,112 @@ class _EditorScreenState extends State<EditorScreen> {
   int _selectedTool = 0;
   EditorImage? _editorImage;
   bool _isImporting = false;
+
   double _brightness = 0;
   double _contrast = 0;
   double _saturation = 0;
+
+  int _quarterTurns = 0;
+  bool _flipHorizontal = false;
+  bool _flipVertical = false;
+  double? _cropAspectRatio;
+
+  final List<_EditorSnapshot> _undoHistory = [];
+  final List<_EditorSnapshot> _redoHistory = [];
+
+  static const List<_EditorTool> _tools = [
+    _EditorTool('Move', Icons.open_with_rounded),
+    _EditorTool('Crop', Icons.crop_rounded),
+    _EditorTool('Adjust', Icons.tune_rounded),
+    _EditorTool('Transform', Icons.transform_rounded),
+    _EditorTool('Filters', Icons.filter_vintage_outlined),
+    _EditorTool('Retouch', Icons.auto_fix_high_rounded),
+    _EditorTool('Text', Icons.text_fields_rounded),
+    _EditorTool('Layers', Icons.layers_outlined),
+  ];
 
   @override
   void initState() {
     super.initState();
     _editorImage = widget.initialImage;
+  }
+
+  _EditorSnapshot get _currentSnapshot {
+    return _EditorSnapshot(
+      brightness: _brightness,
+      contrast: _contrast,
+      saturation: _saturation,
+      quarterTurns: _quarterTurns,
+      flipHorizontal: _flipHorizontal,
+      flipVertical: _flipVertical,
+      cropAspectRatio: _cropAspectRatio,
+    );
+  }
+
+  void _recordHistory() {
+    _undoHistory.add(_currentSnapshot);
+
+    if (_undoHistory.length > 50) {
+      _undoHistory.removeAt(0);
+    }
+
+    _redoHistory.clear();
+  }
+
+  void _restoreSnapshot(_EditorSnapshot snapshot) {
+    setState(() {
+      _brightness = snapshot.brightness;
+      _contrast = snapshot.contrast;
+      _saturation = snapshot.saturation;
+      _quarterTurns = snapshot.quarterTurns;
+      _flipHorizontal = snapshot.flipHorizontal;
+      _flipVertical = snapshot.flipVertical;
+      _cropAspectRatio = snapshot.cropAspectRatio;
+    });
+  }
+
+  void _undo() {
+    if (_undoHistory.isEmpty) {
+      return;
+    }
+
+    final _EditorSnapshot previous = _undoHistory.removeLast();
+    _redoHistory.add(_currentSnapshot);
+    _restoreSnapshot(previous);
+  }
+
+  void _redo() {
+    if (_redoHistory.isEmpty) {
+      return;
+    }
+
+    final _EditorSnapshot next = _redoHistory.removeLast();
+    _undoHistory.add(_currentSnapshot);
+    _restoreSnapshot(next);
+  }
+
+  void _applyAction(VoidCallback action) {
+    _recordHistory();
+
+    setState(action);
+  }
+
+  void _resetAll() {
+    if (_editorImage == null) {
+      return;
+    }
+
+    _recordHistory();
+
+    setState(() {
+      _brightness = 0;
+      _contrast = 0;
+      _saturation = 0;
+      _quarterTurns = 0;
+      _flipHorizontal = false;
+      _flipVertical = false;
+      _cropAspectRatio = null;
+    });
   }
 
   Future<void> _pickImage() async {
@@ -50,6 +149,12 @@ class _EditorScreenState extends State<EditorScreen> {
         _brightness = 0;
         _contrast = 0;
         _saturation = 0;
+        _quarterTurns = 0;
+        _flipHorizontal = false;
+        _flipVertical = false;
+        _cropAspectRatio = null;
+        _undoHistory.clear();
+        _redoHistory.clear();
       });
     } catch (error) {
       if (!mounted) {
@@ -65,17 +170,6 @@ class _EditorScreenState extends State<EditorScreen> {
       }
     }
   }
-
-  static const List<_EditorTool> _tools = [
-    _EditorTool('Move', Icons.open_with_rounded),
-    _EditorTool('Crop', Icons.crop_rounded),
-    _EditorTool('Adjust', Icons.tune_rounded),
-    _EditorTool('Filters', Icons.filter_vintage_outlined),
-    _EditorTool('Retouch', Icons.auto_fix_high_rounded),
-    _EditorTool('Text', Icons.text_fields_rounded),
-    _EditorTool('Layers', Icons.layers_outlined),
-    _EditorTool('More', Icons.more_horiz_rounded),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +189,8 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildTopBar() {
+    final EditorImage? image = _editorImage;
+
     return Container(
       height: 58,
       padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -123,37 +219,45 @@ class _EditorScreenState extends State<EditorScreen> {
                     fontSize: 14,
                   ),
                 ),
-                const Text(
-                  '1080 × 1080 px',
-                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 10),
+                Text(
+                  image == null
+                      ? 'No image selected'
+                      : '${image.width} × ${image.height} px',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 10,
+                  ),
                 ),
               ],
             ),
           ),
           IconButton(
             tooltip: 'Undo',
-            onPressed: null,
+            onPressed: _undoHistory.isEmpty ? null : _undo,
             icon: const Icon(Icons.undo_rounded),
           ),
           IconButton(
             tooltip: 'Redo',
-            onPressed: null,
+            onPressed: _redoHistory.isEmpty ? null : _redo,
             icon: const Icon(Icons.redo_rounded),
           ),
-          const SizedBox(width: 4),
           FilledButton(
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Export tools will be activated next.'),
-                ),
-              );
-            },
+            onPressed: image == null
+                ? null
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'High-resolution export will be activated next.',
+                        ),
+                      ),
+                    );
+                  },
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.primary,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
               minimumSize: const Size(0, 38),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
             child: const Text(
               'Export',
@@ -173,33 +277,21 @@ class _EditorScreenState extends State<EditorScreen> {
       color: const Color(0xFF0B0D12),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final double maximumWidth = constraints.maxWidth - 40;
-          final double maximumHeight = constraints.maxHeight - 40;
-
-          double canvasWidth = 310;
-          double canvasHeight = 310;
-
-          if (image != null && image.width > 0 && image.height > 0) {
-            final double aspectRatio = image.width / image.height;
-
-            if (aspectRatio >= 1) {
-              canvasWidth = maximumWidth.clamp(220, 620);
-              canvasHeight = canvasWidth / aspectRatio;
-
-              if (canvasHeight > maximumHeight) {
-                canvasHeight = maximumHeight;
-                canvasWidth = canvasHeight * aspectRatio;
-              }
-            } else {
-              canvasHeight = maximumHeight.clamp(220, 620);
-              canvasWidth = canvasHeight * aspectRatio;
-
-              if (canvasWidth > maximumWidth) {
-                canvasWidth = maximumWidth;
-                canvasHeight = canvasWidth / aspectRatio;
-              }
-            }
+          if (image == null) {
+            return Center(
+              child: SizedBox(
+                width: 310,
+                height: 310,
+                child: _buildEmptyCanvas(),
+              ),
+            );
           }
+
+          final Size canvasSize = _calculateCanvasSize(
+            image: image,
+            maximumWidth: math.max(100, constraints.maxWidth - 40),
+            maximumHeight: math.max(100, constraints.maxHeight - 40),
+          );
 
           return InteractiveViewer(
             minScale: 0.35,
@@ -207,9 +299,10 @@ class _EditorScreenState extends State<EditorScreen> {
             boundaryMargin: const EdgeInsets.all(300),
             child: Center(
               child: Container(
-                width: canvasWidth,
-                height: canvasHeight,
+                width: canvasSize.width,
+                height: canvasSize.height,
                 decoration: BoxDecoration(
+                  border: Border.all(color: Colors.white24),
                   boxShadow: const [
                     BoxShadow(
                       color: Colors.black87,
@@ -217,17 +310,42 @@ class _EditorScreenState extends State<EditorScreen> {
                       offset: Offset(0, 18),
                     ),
                   ],
-                  border: Border.all(color: Colors.white24),
                 ),
-                child: image == null
-                    ? _buildEmptyCanvas()
-                    : _buildImageCanvas(image),
+                child: _buildImageCanvas(image),
               ),
             ),
           );
         },
       ),
     );
+  }
+
+  Size _calculateCanvasSize({
+    required EditorImage image,
+    required double maximumWidth,
+    required double maximumHeight,
+  }) {
+    double aspectRatio;
+
+    if (_cropAspectRatio != null) {
+      aspectRatio = _cropAspectRatio!;
+    } else {
+      aspectRatio = image.width / image.height;
+
+      if (_quarterTurns.isOdd) {
+        aspectRatio = 1 / aspectRatio;
+      }
+    }
+
+    double width = maximumWidth;
+    double height = width / aspectRatio;
+
+    if (height > maximumHeight) {
+      height = maximumHeight;
+      width = height * aspectRatio;
+    }
+
+    return Size(math.max(100, width), math.max(100, height));
   }
 
   Widget _buildEmptyCanvas() {
@@ -271,57 +389,367 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildImageCanvas(EditorImage image) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        CustomPaint(painter: const _CheckerboardPainter()),
-        ColorFiltered(
-          colorFilter: ColorFilter.matrix(
-            _createColorMatrix(
-              brightness: _brightness,
-              contrast: _contrast,
-              saturation: _saturation,
+    final double scaleX = _flipHorizontal ? -1 : 1;
+    final double scaleY = _flipVertical ? -1 : 1;
+
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const CustomPaint(painter: _CheckerboardPainter()),
+          ColorFiltered(
+            colorFilter: ColorFilter.matrix(
+              _createColorMatrix(
+                brightness: _brightness,
+                contrast: _contrast,
+                saturation: _saturation,
+              ),
+            ),
+            child: Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.identity()
+                ..scaleByDouble(scaleX, scaleY, 1, 1)
+                ..rotateZ(_quarterTurns * math.pi / 2),
+              child: Image.file(
+                File(image.path),
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) {
+                  return Center(
+                    child: Text(
+                      'Unable to display image.\n$error',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.black87),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
-          child: Image.file(
-            File(image.path),
-            fit: BoxFit.contain,
-            filterQuality: FilterQuality.high,
-            gaplessPlayback: true,
-            errorBuilder: (context, error, stackTrace) {
-              return Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Text(
-                    'Unable to display this image.\n$error',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.black87),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Material(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(10),
+              child: IconButton(
+                tooltip: 'Replace photo',
+                onPressed: _pickImage,
+                icon: _isImporting
+                    ? const SizedBox(
+                        width: 19,
+                        height: 19,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.image_search_outlined, size: 20),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolPanel() {
+    if (_selectedTool == 1) {
+      return _buildCropPanel();
+    }
+
+    if (_selectedTool == 2) {
+      return _buildAdjustPanel();
+    }
+
+    if (_selectedTool == 3) {
+      return _buildTransformPanel();
+    }
+
+    if (_selectedTool == 7) {
+      return _buildLayersPanel();
+    }
+
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: Row(
+        children: [
+          Icon(_tools[_selectedTool].icon, size: 18, color: AppTheme.primary),
+          const SizedBox(width: 9),
+          Text(
+            '${_tools[_selectedTool].label} tool selected',
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+          ),
+          const Spacer(),
+          TextButton(onPressed: _resetAll, child: const Text('Reset all')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCropPanel() {
+    final List<_CropPreset> presets = [
+      const _CropPreset('Original', null),
+      const _CropPreset('1:1', 1),
+      const _CropPreset('4:5', 4 / 5),
+      const _CropPreset('3:4', 3 / 4),
+      const _CropPreset('16:9', 16 / 9),
+      const _CropPreset('9:16', 9 / 16),
+    ];
+
+    return Container(
+      height: 92,
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        itemCount: presets.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 9),
+        itemBuilder: (context, index) {
+          final _CropPreset preset = presets[index];
+          final bool selected = _cropAspectRatio == preset.aspectRatio;
+
+          return ChoiceChip(
+            selected: selected,
+            label: Text(preset.label),
+            onSelected: (_) {
+              if (_editorImage == null) {
+                return;
+              }
+
+              _applyAction(() {
+                _cropAspectRatio = preset.aspectRatio;
+              });
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAdjustPanel() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: Column(
+        children: [
+          _AdjustmentSlider(
+            label: 'Brightness',
+            value: _brightness,
+            onChangeStart: (_) => _recordHistory(),
+            onChanged: (value) {
+              setState(() => _brightness = value);
+            },
+          ),
+          _AdjustmentSlider(
+            label: 'Contrast',
+            value: _contrast,
+            onChangeStart: (_) => _recordHistory(),
+            onChanged: (value) {
+              setState(() => _contrast = value);
+            },
+          ),
+          _AdjustmentSlider(
+            label: 'Saturation',
+            value: _saturation,
+            onChangeStart: (_) => _recordHistory(),
+            onChanged: (value) {
+              setState(() => _saturation = value);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTransformPanel() {
+    return Container(
+      height: 92,
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        children: [
+          _TransformAction(
+            icon: Icons.rotate_left_rounded,
+            label: 'Rotate left',
+            onTap: () {
+              if (_editorImage == null) return;
+
+              _applyAction(() {
+                _quarterTurns = (_quarterTurns + 3) % 4;
+              });
+            },
+          ),
+          _TransformAction(
+            icon: Icons.rotate_right_rounded,
+            label: 'Rotate right',
+            onTap: () {
+              if (_editorImage == null) return;
+
+              _applyAction(() {
+                _quarterTurns = (_quarterTurns + 1) % 4;
+              });
+            },
+          ),
+          _TransformAction(
+            icon: Icons.flip_rounded,
+            label: 'Flip H',
+            onTap: () {
+              if (_editorImage == null) return;
+
+              _applyAction(() {
+                _flipHorizontal = !_flipHorizontal;
+              });
+            },
+          ),
+          _TransformAction(
+            icon: Icons.flip_rounded,
+            label: 'Flip V',
+            quarterTurns: 1,
+            onTap: () {
+              if (_editorImage == null) return;
+
+              _applyAction(() {
+                _flipVertical = !_flipVertical;
+              });
+            },
+          ),
+          _TransformAction(
+            icon: Icons.restart_alt_rounded,
+            label: 'Reset',
+            onTap: _resetAll,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLayersPanel() {
+    return Container(
+      height: 86,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primary, width: 2),
+            ),
+            child: _editorImage == null
+                ? const CustomPaint(painter: _CheckerboardPainter())
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(_editorImage!.path),
+                      fit: BoxFit.cover,
+                    ),
                   ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _editorImage == null ? 'Background' : 'Photo Layer 1',
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Layer visibility',
+            onPressed: () {},
+            icon: const Icon(Icons.visibility_outlined),
+          ),
+          IconButton(
+            tooltip: 'Add layer',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Multiple layers are coming next.'),
                 ),
               );
             },
+            icon: const Icon(Icons.add_box_outlined),
           ),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: Material(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(10),
-            child: IconButton(
-              tooltip: 'Replace photo',
-              onPressed: _pickImage,
-              icon: _isImporting
-                  ? const SizedBox(
-                      width: 19,
-                      height: 19,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.image_search_outlined, size: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBottomToolbar() {
+    return Container(
+      height: 78,
+      decoration: const BoxDecoration(
+        color: AppTheme.background,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 7),
+        itemCount: _tools.length,
+        itemBuilder: (context, index) {
+          final _EditorTool tool = _tools[index];
+          final bool selected = _selectedTool == index;
+
+          return InkWell(
+            onTap: () {
+              setState(() => _selectedTool = index);
+            },
+            borderRadius: BorderRadius.circular(15),
+            child: SizedBox(
+              width: 76,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 40,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? AppTheme.primary.withValues(alpha: 0.18)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      tool.icon,
+                      size: 21,
+                      color: selected
+                          ? AppTheme.primary
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    tool.label,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                      color: selected ? Colors.white : AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
-      ],
+          );
+        },
+      ),
     );
   }
 
@@ -365,7 +793,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     final double contrastOffset = 128 * (1 - contrastValue);
 
-    final List<double> contrastBrightnessMatrix = [
+    final List<double> adjustmentMatrix = [
       contrastValue,
       0,
       0,
@@ -388,7 +816,7 @@ class _EditorScreenState extends State<EditorScreen> {
       0,
     ];
 
-    return _multiplyColorMatrices(contrastBrightnessMatrix, saturationMatrix);
+    return _multiplyColorMatrices(adjustmentMatrix, saturationMatrix);
   }
 
   List<double> _multiplyColorMatrices(List<double> first, List<double> second) {
@@ -408,181 +836,6 @@ class _EditorScreenState extends State<EditorScreen> {
 
     return result;
   }
-
-  Widget _buildToolPanel() {
-    if (_selectedTool == 2) {
-      return Container(
-        padding: const EdgeInsets.fromLTRB(18, 13, 18, 10),
-        decoration: const BoxDecoration(
-          color: AppTheme.surface,
-          border: Border(top: BorderSide(color: Colors.white10)),
-        ),
-        child: Column(
-          children: [
-            _AdjustmentSlider(
-              label: 'Brightness',
-              value: _brightness,
-              onChanged: (value) {
-                setState(() => _brightness = value);
-              },
-            ),
-            _AdjustmentSlider(
-              label: 'Contrast',
-              value: _contrast,
-              onChanged: (value) {
-                setState(() => _contrast = value);
-              },
-            ),
-            _AdjustmentSlider(
-              label: 'Saturation',
-              value: _saturation,
-              onChanged: (value) {
-                setState(() => _saturation = value);
-              },
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_selectedTool == 6) {
-      return Container(
-        height: 86,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: const BoxDecoration(
-          color: AppTheme.surface,
-          border: Border(top: BorderSide(color: Colors.white10)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.primary, width: 2),
-              ),
-              child: const CustomPaint(painter: _CheckerboardPainter()),
-            ),
-            const SizedBox(width: 12),
-            const Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Background',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  SizedBox(height: 3),
-                  Text(
-                    'Base canvas layer',
-                    style: TextStyle(
-                      color: AppTheme.textSecondary,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'Layer visibility',
-              onPressed: () {},
-              icon: const Icon(Icons.visibility_outlined),
-            ),
-            IconButton(
-              tooltip: 'Add layer',
-              onPressed: () {},
-              icon: const Icon(Icons.add_box_outlined),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
-      decoration: const BoxDecoration(
-        color: AppTheme.surface,
-        border: Border(top: BorderSide(color: Colors.white10)),
-      ),
-      child: Row(
-        children: [
-          Icon(_tools[_selectedTool].icon, size: 18, color: AppTheme.primary),
-          const SizedBox(width: 9),
-          Text(
-            '${_tools[_selectedTool].label} tool selected',
-            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-          ),
-          const Spacer(),
-          TextButton(onPressed: () {}, child: const Text('Reset')),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomToolbar() {
-    return Container(
-      height: 78,
-      decoration: const BoxDecoration(
-        color: AppTheme.background,
-        border: Border(top: BorderSide(color: Colors.white10)),
-      ),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 7),
-        itemCount: _tools.length,
-        itemBuilder: (context, index) {
-          final tool = _tools[index];
-          final selected = _selectedTool == index;
-
-          return InkWell(
-            onTap: () {
-              setState(() => _selectedTool = index);
-            },
-            borderRadius: BorderRadius.circular(15),
-            child: SizedBox(
-              width: 72,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 180),
-                    width: 38,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? AppTheme.primary.withValues(alpha: 0.18)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      tool.icon,
-                      size: 21,
-                      color: selected
-                          ? AppTheme.primary
-                          : AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    tool.label,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-                      color: selected ? Colors.white : AppTheme.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
 }
 
 class _AdjustmentSlider extends StatelessWidget {
@@ -590,11 +843,13 @@ class _AdjustmentSlider extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onChanged,
+    required this.onChangeStart,
   });
 
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeStart;
 
   @override
   Widget build(BuildContext context) {
@@ -612,6 +867,7 @@ class _AdjustmentSlider extends StatelessWidget {
             value: value,
             min: -100,
             max: 100,
+            onChangeStart: onChangeStart,
             onChanged: onChanged,
           ),
         ),
@@ -628,6 +884,48 @@ class _AdjustmentSlider extends StatelessWidget {
   }
 }
 
+class _TransformAction extends StatelessWidget {
+  const _TransformAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.quarterTurns = 0,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final int quarterTurns;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: SizedBox(
+        width: 86,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            RotatedBox(
+              quarterTurns: quarterTurns,
+              child: Icon(icon, color: AppTheme.primary),
+            ),
+            const SizedBox(height: 7),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 10,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _EditorTool {
   const _EditorTool(this.label, this.icon);
 
@@ -635,21 +933,48 @@ class _EditorTool {
   final IconData icon;
 }
 
+class _CropPreset {
+  const _CropPreset(this.label, this.aspectRatio);
+
+  final String label;
+  final double? aspectRatio;
+}
+
+class _EditorSnapshot {
+  const _EditorSnapshot({
+    required this.brightness,
+    required this.contrast,
+    required this.saturation,
+    required this.quarterTurns,
+    required this.flipHorizontal,
+    required this.flipVertical,
+    required this.cropAspectRatio,
+  });
+
+  final double brightness;
+  final double contrast;
+  final double saturation;
+  final int quarterTurns;
+  final bool flipHorizontal;
+  final bool flipVertical;
+  final double? cropAspectRatio;
+}
+
 class _CheckerboardPainter extends CustomPainter {
   const _CheckerboardPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
-    const cellSize = 18.0;
-    final lightPaint = Paint()..color = const Color(0xFFF1F1F1);
-    final darkPaint = Paint()..color = const Color(0xFFD7D7D7);
+    const double cellSize = 18;
+    final Paint lightPaint = Paint()..color = const Color(0xFFF1F1F1);
+    final Paint darkPaint = Paint()..color = const Color(0xFFD7D7D7);
 
     canvas.drawRect(Offset.zero & size, lightPaint);
 
     for (double y = 0; y < size.height; y += cellSize) {
       for (double x = 0; x < size.width; x += cellSize) {
-        final row = (y / cellSize).floor();
-        final column = (x / cellSize).floor();
+        final int row = (y / cellSize).floor();
+        final int column = (x / cellSize).floor();
 
         if ((row + column).isOdd) {
           canvas.drawRect(Rect.fromLTWH(x, y, cellSize, cellSize), darkPaint);
