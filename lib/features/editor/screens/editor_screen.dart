@@ -2,10 +2,13 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/app_theme.dart';
+import '../../../services/export/image_export_service.dart';
 import '../../../services/image/image_import_service.dart';
 import '../models/editor_image.dart';
+import '../models/photo_filter_preset.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key, required this.projectName, this.initialImage});
@@ -21,10 +24,12 @@ class _EditorScreenState extends State<EditorScreen> {
   int _selectedTool = 0;
   EditorImage? _editorImage;
   bool _isImporting = false;
+  bool _isExporting = false;
 
   double _brightness = 0;
   double _contrast = 0;
   double _saturation = 0;
+  String _selectedFilterId = 'original';
 
   int _quarterTurns = 0;
   bool _flipHorizontal = false;
@@ -56,6 +61,7 @@ class _EditorScreenState extends State<EditorScreen> {
       brightness: _brightness,
       contrast: _contrast,
       saturation: _saturation,
+      filterId: _selectedFilterId,
       quarterTurns: _quarterTurns,
       flipHorizontal: _flipHorizontal,
       flipVertical: _flipVertical,
@@ -78,6 +84,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _brightness = snapshot.brightness;
       _contrast = snapshot.contrast;
       _saturation = snapshot.saturation;
+      _selectedFilterId = snapshot.filterId;
       _quarterTurns = snapshot.quarterTurns;
       _flipHorizontal = snapshot.flipHorizontal;
       _flipVertical = snapshot.flipVertical;
@@ -122,6 +129,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _brightness = 0;
       _contrast = 0;
       _saturation = 0;
+      _selectedFilterId = 'original';
       _quarterTurns = 0;
       _flipHorizontal = false;
       _flipVertical = false;
@@ -167,6 +175,124 @@ class _EditorScreenState extends State<EditorScreen> {
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
+      }
+    }
+  }
+
+  Future<void> _showExportSheet() async {
+    if (_editorImage == null || _isExporting) {
+      return;
+    }
+
+    final PhotoExportFormat?
+    selectedFormat = await showModalBottomSheet<PhotoExportFormat>(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Export Image',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Export at the original image resolution.',
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: 18),
+                _ExportFormatTile(
+                  icon: Icons.image_outlined,
+                  title: 'PNG',
+                  subtitle: 'Lossless quality and transparency support',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop(PhotoExportFormat.png);
+                  },
+                ),
+                const SizedBox(height: 10),
+                _ExportFormatTile(
+                  icon: Icons.photo_outlined,
+                  title: 'JPG',
+                  subtitle: 'High quality with a smaller file size',
+                  onTap: () {
+                    Navigator.of(sheetContext).pop(PhotoExportFormat.jpg);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selectedFormat == null || !mounted) {
+      return;
+    }
+
+    await _exportImage(selectedFormat);
+  }
+
+  Future<void> _exportImage(PhotoExportFormat format) async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isExporting) {
+      return;
+    }
+
+    setState(() => _isExporting = true);
+
+    try {
+      final File exportedFile = await ImageExportService.instance.export(
+        sourcePath: image.path,
+        projectName: widget.projectName,
+        brightness: _brightness,
+        contrast: _contrast,
+        saturation: _saturation,
+        filterId: _selectedFilterId,
+        quarterTurns: _quarterTurns,
+        flipHorizontal: _flipHorizontal,
+        flipVertical: _flipVertical,
+        cropAspectRatio: _cropAspectRatio,
+        format: format,
+        jpgQuality: 95,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Export completed: ${exportedFile.path.split('/').last}',
+          ),
+        ),
+      );
+
+      await SharePlus.instance.share(
+        ShareParams(
+          title: 'PhotoForge Studio Export',
+          text: 'Created with PhotoForge Studio',
+          files: [XFile(exportedFile.path)],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Export failed: $error')));
+    } finally {
+      if (mounted) {
+        setState(() => _isExporting = false);
       }
     }
   }
@@ -242,27 +368,26 @@ class _EditorScreenState extends State<EditorScreen> {
             icon: const Icon(Icons.redo_rounded),
           ),
           FilledButton(
-            onPressed: image == null
-                ? null
-                : () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'High-resolution export will be activated next.',
-                        ),
-                      ),
-                    );
-                  },
+            onPressed: image == null || _isExporting ? null : _showExportSheet,
             style: FilledButton.styleFrom(
               backgroundColor: AppTheme.primary,
               foregroundColor: Colors.white,
               minimumSize: const Size(0, 38),
               padding: const EdgeInsets.symmetric(horizontal: 14),
             ),
-            child: const Text(
-              'Export',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
+            child: _isExporting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text(
+                    'Export',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
           ),
           const SizedBox(width: 8),
         ],
@@ -399,10 +524,13 @@ class _EditorScreenState extends State<EditorScreen> {
           const CustomPaint(painter: _CheckerboardPainter()),
           ColorFiltered(
             colorFilter: ColorFilter.matrix(
-              _createColorMatrix(
-                brightness: _brightness,
-                contrast: _contrast,
-                saturation: _saturation,
+              _multiplyColorMatrices(
+                _createColorMatrix(
+                  brightness: _brightness,
+                  contrast: _contrast,
+                  saturation: _saturation,
+                ),
+                PhotoFilterPreset.byId(_selectedFilterId).previewMatrix,
               ),
             ),
             child: Transform(
@@ -462,6 +590,10 @@ class _EditorScreenState extends State<EditorScreen> {
 
     if (_selectedTool == 3) {
       return _buildTransformPanel();
+    }
+
+    if (_selectedTool == 4) {
+      return _buildFiltersPanel();
     }
 
     if (_selectedTool == 7) {
@@ -567,6 +699,91 @@ class _EditorScreenState extends State<EditorScreen> {
             },
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFiltersPanel() {
+    final EditorImage? image = _editorImage;
+
+    return Container(
+      height: 116,
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        itemCount: PhotoFilterPreset.presets.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final PhotoFilterPreset preset = PhotoFilterPreset.presets[index];
+
+          final bool selected = preset.id == _selectedFilterId;
+
+          return GestureDetector(
+            onTap: image == null
+                ? null
+                : () {
+                    if (preset.id == _selectedFilterId) {
+                      return;
+                    }
+
+                    _applyAction(() {
+                      _selectedFilterId = preset.id;
+                    });
+                  },
+            child: SizedBox(
+              width: 74,
+              child: Column(
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 64,
+                    height: 64,
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: selected ? AppTheme.primary : Colors.white12,
+                        width: selected ? 2 : 1,
+                      ),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: image == null
+                          ? const CustomPaint(painter: _CheckerboardPainter())
+                          : ColorFiltered(
+                              colorFilter: ColorFilter.matrix(
+                                preset.previewMatrix,
+                              ),
+                              child: Image.file(
+                                File(image.path),
+                                fit: BoxFit.cover,
+                                cacheWidth: 180,
+                                filterQuality: FilterQuality.medium,
+                              ),
+                            ),
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    preset.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: selected ? Colors.white : AppTheme.textSecondary,
+                      fontSize: 10,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -838,6 +1055,76 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 }
 
+class _ExportFormatTile extends StatelessWidget {
+  const _ExportFormatTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.surfaceLight,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white10),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: AppTheme.primary),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _AdjustmentSlider extends StatelessWidget {
   const _AdjustmentSlider({
     required this.label,
@@ -945,6 +1232,7 @@ class _EditorSnapshot {
     required this.brightness,
     required this.contrast,
     required this.saturation,
+    required this.filterId,
     required this.quarterTurns,
     required this.flipHorizontal,
     required this.flipVertical,
@@ -954,6 +1242,7 @@ class _EditorSnapshot {
   final double brightness;
   final double contrast;
   final double saturation;
+  final String filterId;
   final int quarterTurns;
   final bool flipHorizontal;
   final bool flipVertical;
