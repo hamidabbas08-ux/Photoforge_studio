@@ -30,6 +30,7 @@ class _EditorScreenState extends State<EditorScreen> {
   EditorImage? _editorImage;
   bool _isImporting = false;
   bool _isExporting = false;
+  Size _lastCanvasSize = Size.zero;
 
   double _brightness = 0;
   double _contrast = 0;
@@ -277,6 +278,22 @@ class _EditorScreenState extends State<EditorScreen> {
       final File exportedFile = await ImageExportService.instance.export(
         sourcePath: image.path,
         projectName: widget.projectName,
+        layers: [
+          for (final EditorLayer layer in _layerController.layers)
+            <String, Object?>{
+              'imagePath': layer.imagePath,
+              'isVisible': layer.isVisible,
+              'opacity': layer.opacity,
+              'blendMode': layer.blendMode.name,
+              'offsetX': layer.offset.dx,
+              'offsetY': layer.offset.dy,
+              'scaleX': layer.scaleX,
+              'scaleY': layer.scaleY,
+              'rotation': layer.rotation,
+            },
+        ],
+        previewCanvasWidth: _lastCanvasSize.width,
+        previewCanvasHeight: _lastCanvasSize.height,
         brightness: _brightness,
         contrast: _contrast,
         saturation: _saturation,
@@ -479,6 +496,8 @@ class _EditorScreenState extends State<EditorScreen> {
             maximumWidth: math.max(100, constraints.maxWidth - 40),
             maximumHeight: math.max(100, constraints.maxHeight - 40),
           );
+
+          _lastCanvasSize = canvasSize;
 
           return InteractiveViewer(
             panEnabled: _selectedTool != 0,
@@ -1027,6 +1046,241 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  Future<void> _showLayerProperties(EditorLayer layer) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: AppTheme.surface,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return AnimatedBuilder(
+          animation: _layerController,
+          builder: (context, child) {
+            final EditorLayer? currentLayer = _layerController.layers
+                .where((item) => item.id == layer.id)
+                .firstOrNull;
+
+            if (currentLayer == null) {
+              return const SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Layer no longer exists.'),
+                ),
+              );
+            }
+
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  4,
+                  20,
+                  20 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Layer Properties',
+                                style: TextStyle(
+                                  fontSize: 21,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                currentLayer.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: AppTheme.textSecondary,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: currentLayer.isVisible
+                              ? 'Hide layer'
+                              : 'Show layer',
+                          onPressed: () {
+                            _layerController.toggleVisibility(currentLayer.id);
+                          },
+                          icon: Icon(
+                            currentLayer.isVisible
+                                ? Icons.visibility_rounded
+                                : Icons.visibility_off_rounded,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: currentLayer.isLocked
+                              ? 'Unlock layer'
+                              : 'Lock layer',
+                          onPressed: () {
+                            _layerController.toggleLock(currentLayer.id);
+                          },
+                          icon: Icon(
+                            currentLayer.isLocked
+                                ? Icons.lock_rounded
+                                : Icons.lock_open_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    const Text(
+                      'Opacity',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Slider(
+                            value: currentLayer.opacity,
+                            min: 0,
+                            max: 1,
+                            divisions: 100,
+                            label: '${(currentLayer.opacity * 100).round()}%',
+                            onChanged: currentLayer.isLocked
+                                ? null
+                                : (value) {
+                                    _layerController.setOpacity(
+                                      currentLayer.id,
+                                      value,
+                                    );
+                                  },
+                          ),
+                        ),
+                        SizedBox(
+                          width: 48,
+                          child: Text(
+                            '${(currentLayer.opacity * 100).round()}%',
+                            textAlign: TextAlign.end,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    const Text(
+                      'Blend Mode',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<EditorBlendMode>(
+                      initialValue: currentLayer.blendMode,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: AppTheme.surfaceLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: [
+                        for (final EditorBlendMode mode
+                            in EditorBlendMode.values)
+                          DropdownMenuItem(
+                            value: mode,
+                            child: Text(LayerBlendMapper.label(mode)),
+                          ),
+                      ],
+                      onChanged: currentLayer.isLocked
+                          ? null
+                          : (mode) {
+                              if (mode == null) {
+                                return;
+                              }
+
+                              _layerController.setBlendMode(
+                                currentLayer.id,
+                                mode,
+                              );
+                            },
+                    ),
+                    const SizedBox(height: 20),
+
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceLight,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Column(
+                        children: [
+                          _LayerPropertyRow(
+                            label: 'Position',
+                            value:
+                                'X ${currentLayer.offset.dx.round()}  ·  Y ${currentLayer.offset.dy.round()}',
+                          ),
+                          const SizedBox(height: 10),
+                          _LayerPropertyRow(
+                            label: 'Scale',
+                            value: '${(currentLayer.scaleX * 100).round()}%',
+                          ),
+                          const SizedBox(height: 10),
+                          _LayerPropertyRow(
+                            label: 'Rotation',
+                            value:
+                                '${(currentLayer.rotation * 180 / 3.141592653589793).round()}°',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: currentLayer.isLocked
+                            ? null
+                            : () {
+                                _layerController.resetLayerTransform(
+                                  currentLayer.id,
+                                );
+                              },
+                        icon: const Icon(Icons.restart_alt_rounded),
+                        label: const Text('Reset Layer Transform'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                        },
+                        child: const Text('Done'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildLayersPanel() {
     return AnimatedBuilder(
       animation: _layerController,
@@ -1209,6 +1463,13 @@ class _EditorScreenState extends State<EditorScreen> {
                                 _layerController.moveLayerDown(
                                   selectedLayer.id,
                                 );
+                              },
+                            ),
+                            _LayerActionButton(
+                              tooltip: 'Layer properties',
+                              icon: Icons.tune_rounded,
+                              onPressed: () {
+                                _showLayerProperties(selectedLayer);
                               },
                             ),
                             _LayerActionButton(
@@ -1477,6 +1738,31 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     return result;
+  }
+}
+
+class _LayerPropertyRow extends StatelessWidget {
+  const _LayerPropertyRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 11),
+        ),
+      ],
+    );
   }
 }
 
