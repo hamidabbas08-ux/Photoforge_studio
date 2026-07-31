@@ -9,10 +9,6 @@ import '../../../services/export/image_export_service.dart';
 import '../../../services/image/image_import_service.dart';
 import '../models/editor_image.dart';
 import '../models/photo_filter_preset.dart';
-import '../layers/controllers/layer_controller.dart';
-import '../layers/models/editor_layer.dart';
-import '../layers/models/layer_blend_mapper.dart';
-import '../layers/widgets/layer_blend_mask.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key, required this.projectName, this.initialImage});
@@ -25,7 +21,6 @@ class EditorScreen extends StatefulWidget {
 }
 
 class _EditorScreenState extends State<EditorScreen> {
-  final LayerController _layerController = LayerController();
   int _selectedTool = 0;
   EditorImage? _editorImage;
   bool _isImporting = false;
@@ -40,12 +35,6 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _flipHorizontal = false;
   bool _flipVertical = false;
   double? _cropAspectRatio;
-
-  Offset _gestureStartOffset = Offset.zero;
-  Offset _gestureStartFocalPoint = Offset.zero;
-  double _gestureStartScaleX = 1;
-  double _gestureStartScaleY = 1;
-  double _gestureStartRotation = 0;
 
   final List<_EditorSnapshot> _undoHistory = [];
   final List<_EditorSnapshot> _redoHistory = [];
@@ -65,12 +54,6 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     _editorImage = widget.initialImage;
-  }
-
-  @override
-  void dispose() {
-    _layerController.dispose();
-    super.dispose();
   }
 
   _EditorSnapshot get _currentSnapshot {
@@ -154,7 +137,7 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
-  Future<void> _pickImage({bool addAsLayer = false}) async {
+  Future<void> _pickImage() async {
     if (_isImporting) {
       return;
     }
@@ -169,27 +152,18 @@ class _EditorScreenState extends State<EditorScreen> {
         return;
       }
 
-      if (addAsLayer && _layerController.hasLayers) {
-        _layerController.addImageLayer(imagePath: image.path);
-
-        setState(() {});
-      } else {
-        _layerController.replaceAllWithImage(image.path);
-
-        setState(() {
-          _editorImage = image;
-          _brightness = 0;
-          _contrast = 0;
-          _saturation = 0;
-          _selectedFilterId = 'original';
-          _quarterTurns = 0;
-          _flipHorizontal = false;
-          _flipVertical = false;
-          _cropAspectRatio = null;
-          _undoHistory.clear();
-          _redoHistory.clear();
-        });
-      }
+      setState(() {
+        _editorImage = image;
+        _brightness = 0;
+        _contrast = 0;
+        _saturation = 0;
+        _quarterTurns = 0;
+        _flipHorizontal = false;
+        _flipVertical = false;
+        _cropAspectRatio = null;
+        _undoHistory.clear();
+        _redoHistory.clear();
+      });
     } catch (error) {
       if (!mounted) {
         return;
@@ -323,42 +297,6 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  void _onLayerScaleStart(ScaleStartDetails details, EditorLayer layer) {
-    if (layer.isLocked || _selectedTool != 0) {
-      return;
-    }
-
-    _layerController.selectLayer(layer.id);
-
-    _gestureStartOffset = layer.offset;
-    _gestureStartFocalPoint = details.localFocalPoint;
-    _gestureStartScaleX = layer.scaleX;
-    _gestureStartScaleY = layer.scaleY;
-    _gestureStartRotation = layer.rotation;
-  }
-
-  void _onLayerScaleUpdate(ScaleUpdateDetails details, EditorLayer layer) {
-    if (layer.isLocked || _selectedTool != 0) {
-      return;
-    }
-
-    final Offset movement = details.localFocalPoint - _gestureStartFocalPoint;
-
-    final double newScaleX = _gestureStartScaleX * details.scale;
-
-    final double newScaleY = _gestureStartScaleY * details.scale;
-
-    final double newRotation = _gestureStartRotation + details.rotation;
-
-    _layerController.setLayerTransform(
-      layerId: layer.id,
-      offset: _gestureStartOffset + movement,
-      scaleX: newScaleX,
-      scaleY: newScaleY,
-      rotation: newRotation,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -481,8 +419,6 @@ class _EditorScreenState extends State<EditorScreen> {
           );
 
           return InteractiveViewer(
-            panEnabled: _selectedTool != 0,
-            scaleEnabled: _selectedTool != 0,
             minScale: 0.35,
             maxScale: 8,
             boundaryMargin: const EdgeInsets.all(300),
@@ -602,45 +538,18 @@ class _EditorScreenState extends State<EditorScreen> {
               transform: Matrix4.identity()
                 ..scaleByDouble(scaleX, scaleY, 1, 1)
                 ..rotateZ(_quarterTurns * math.pi / 2),
-              child: AnimatedBuilder(
-                animation: _layerController,
-                builder: (context, child) {
-                  final List<EditorLayer> visibleLayers = _layerController
-                      .layers
-                      .where(
-                        (layer) => layer.isVisible && layer.imagePath != null,
-                      )
-                      .toList();
-
-                  if (visibleLayers.isEmpty) {
-                    return const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.visibility_off_outlined,
-                            color: Colors.black45,
-                            size: 34,
-                          ),
-                          SizedBox(height: 9),
-                          Text(
-                            'All layers are hidden',
-                            style: TextStyle(
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      for (final EditorLayer layer in visibleLayers)
-                        _buildCanvasLayer(layer),
-                    ],
+              child: Image.file(
+                File(image.path),
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) {
+                  return Center(
+                    child: Text(
+                      'Unable to display image.\n$error',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.black87),
+                    ),
                   );
                 },
               ),
@@ -653,12 +562,8 @@ class _EditorScreenState extends State<EditorScreen> {
               color: Colors.black54,
               borderRadius: BorderRadius.circular(10),
               child: IconButton(
-                tooltip: 'Replace complete project image',
-                onPressed: _isImporting
-                    ? null
-                    : () {
-                        _pickImage();
-                      },
+                tooltip: 'Replace photo',
+                onPressed: _pickImage,
                 icon: _isImporting
                     ? const SizedBox(
                         width: 19,
@@ -669,84 +574,6 @@ class _EditorScreenState extends State<EditorScreen> {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCanvasLayer(EditorLayer layer) {
-    final String? imagePath = layer.imagePath;
-
-    if (imagePath == null) {
-      return const SizedBox.shrink();
-    }
-
-    final bool selected = layer.id == _layerController.selectedLayerId;
-
-    Widget layerImage = Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..translateByDouble(layer.offset.dx, layer.offset.dy, 0, 1)
-        ..rotateZ(layer.rotation)
-        ..scaleByDouble(layer.scaleX, layer.scaleY, 1, 1),
-      child: Image.file(
-        File(imagePath),
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
-        gaplessPlayback: true,
-        errorBuilder: (context, error, stackTrace) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Layer image unavailable\n$error',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.black87, fontSize: 11),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    layerImage = Opacity(
-      opacity: layer.opacity.clamp(0.0, 1.0),
-      child: layerImage,
-    );
-
-    if (selected && _selectedTool == 0 && !layer.isLocked) {
-      layerImage = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onScaleStart: (details) {
-          _onLayerScaleStart(details, layer);
-        },
-        onScaleUpdate: (details) {
-          _onLayerScaleUpdate(details, layer);
-        },
-        child: layerImage,
-      );
-    }
-
-    if (layer.blendMode != EditorBlendMode.normal) {
-      layerImage = LayerBlendMask(
-        blendMode: LayerBlendMapper.toFlutterBlendMode(layer.blendMode),
-        child: layerImage,
-      );
-    }
-
-    return Positioned.fill(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          layerImage,
-          if (selected && (_selectedTool == 0 || _selectedTool == 7))
-            IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppTheme.primary, width: 2),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -1028,308 +855,56 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildLayersPanel() {
-    return AnimatedBuilder(
-      animation: _layerController,
-      builder: (context, child) {
-        final List<EditorLayer> layers = _layerController.layers.reversed
-            .toList();
-
-        final EditorLayer? selectedLayer = _layerController.selectedLayer;
-
-        return Container(
-          height: 214,
-          decoration: const BoxDecoration(
-            color: AppTheme.surface,
-            border: Border(top: BorderSide(color: Colors.white10)),
-          ),
-          child: Column(
-            children: [
-              SizedBox(
-                height: 122,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: layers.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'No layers yet',
-                                style: TextStyle(
-                                  color: AppTheme.textSecondary,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            )
-                          : ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              physics: const BouncingScrollPhysics(),
-                              padding: const EdgeInsets.all(12),
-                              itemCount: layers.length,
-                              separatorBuilder: (context, index) =>
-                                  const SizedBox(width: 10),
-                              itemBuilder: (context, index) {
-                                final EditorLayer layer = layers[index];
-
-                                final bool selected =
-                                    layer.id ==
-                                    _layerController.selectedLayerId;
-
-                                return _buildLayerCard(layer, selected);
-                              },
-                            ),
+    return Container(
+      height: 86,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.primary, width: 2),
+            ),
+            child: _editorImage == null
+                ? const CustomPaint(painter: _CheckerboardPainter())
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(
+                      File(_editorImage!.path),
+                      fit: BoxFit.cover,
                     ),
-                    Container(
-                      width: 62,
-                      margin: const EdgeInsets.fromLTRB(0, 12, 10, 12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.surfaceLight,
-                        borderRadius: BorderRadius.circular(15),
-                        border: Border.all(color: Colors.white10),
-                      ),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(15),
-                        onTap: _isImporting
-                            ? null
-                            : () {
-                                _pickImage(addAsLayer: true);
-                              },
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            _isImporting
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(
-                                    Icons.add_photo_alternate_outlined,
-                                    color: AppTheme.primary,
-                                    size: 27,
-                                  ),
-                            const SizedBox(height: 7),
-                            const Text(
-                              'Add Layer',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: selectedLayer == null
-                    ? const Center(
-                        child: Text(
-                          'Select a layer to manage it',
-                          style: TextStyle(
-                            color: AppTheme.textSecondary,
-                            fontSize: 11,
-                          ),
-                        ),
-                      )
-                    : Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 7,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    selectedLayer.name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 3),
-                                  Text(
-                                    selectedLayer.isLocked
-                                        ? 'Layer locked'
-                                        : 'Image layer selected',
-                                    style: const TextStyle(
-                                      color: AppTheme.textSecondary,
-                                      fontSize: 9,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _LayerActionButton(
-                              tooltip: selectedLayer.isVisible
-                                  ? 'Hide layer'
-                                  : 'Show layer',
-                              icon: selectedLayer.isVisible
-                                  ? Icons.visibility_rounded
-                                  : Icons.visibility_off_rounded,
-                              onPressed: () {
-                                _layerController.toggleVisibility(
-                                  selectedLayer.id,
-                                );
-                              },
-                            ),
-                            _LayerActionButton(
-                              tooltip: selectedLayer.isLocked
-                                  ? 'Unlock layer'
-                                  : 'Lock layer',
-                              icon: selectedLayer.isLocked
-                                  ? Icons.lock_rounded
-                                  : Icons.lock_open_rounded,
-                              onPressed: () {
-                                _layerController.toggleLock(selectedLayer.id);
-                              },
-                            ),
-                            _LayerActionButton(
-                              tooltip: 'Move layer up',
-                              icon: Icons.arrow_upward_rounded,
-                              onPressed: () {
-                                _layerController.moveLayerUp(selectedLayer.id);
-                              },
-                            ),
-                            _LayerActionButton(
-                              tooltip: 'Move layer down',
-                              icon: Icons.arrow_downward_rounded,
-                              onPressed: () {
-                                _layerController.moveLayerDown(
-                                  selectedLayer.id,
-                                );
-                              },
-                            ),
-                            _LayerActionButton(
-                              tooltip: 'Duplicate layer',
-                              icon: Icons.copy_rounded,
-                              onPressed: selectedLayer.isLocked
-                                  ? null
-                                  : () {
-                                      _layerController.duplicateLayer(
-                                        selectedLayer.id,
-                                      );
-                                    },
-                            ),
-                            _LayerActionButton(
-                              tooltip: 'Delete layer',
-                              icon: Icons.delete_outline_rounded,
-                              onPressed: selectedLayer.isLocked
-                                  ? null
-                                  : () {
-                                      _layerController.deleteLayer(
-                                        selectedLayer.id,
-                                      );
-                                    },
-                            ),
-                          ],
-                        ),
-                      ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLayerCard(EditorLayer layer, bool selected) {
-    return GestureDetector(
-      onTap: () {
-        _layerController.selectLayer(layer.id);
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 88,
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: selected
-              ? AppTheme.primary.withValues(alpha: 0.16)
-              : AppTheme.surfaceLight,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? AppTheme.primary : Colors.white10,
-            width: selected ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(9),
-                      color: Colors.black26,
-                    ),
-                    child: layer.imagePath == null
-                        ? const CustomPaint(painter: _CheckerboardPainter())
-                        : ClipRRect(
-                            borderRadius: BorderRadius.circular(9),
-                            child: Image.file(
-                              File(layer.imagePath!),
-                              fit: BoxFit.cover,
-                              cacheWidth: 180,
-                              errorBuilder: (context, error, stackTrace) {
-                                return const Icon(
-                                  Icons.broken_image_outlined,
-                                  color: AppTheme.textSecondary,
-                                );
-                              },
-                            ),
-                          ),
                   ),
-                  if (!layer.isVisible)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(9),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.visibility_off_rounded, size: 21),
-                      ),
-                    ),
-                  if (layer.isLocked)
-                    Positioned(
-                      top: 4,
-                      right: 4,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.67),
-                          borderRadius: BorderRadius.circular(7),
-                        ),
-                        child: const Icon(Icons.lock_rounded, size: 13),
-                      ),
-                    ),
-                ],
-              ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              _editorImage == null ? 'Background' : 'Photo Layer 1',
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 5),
-            Text(
-              layer.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: selected ? Colors.white : AppTheme.textSecondary,
-                fontSize: 9,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
+          ),
+          IconButton(
+            tooltip: 'Layer visibility',
+            onPressed: () {},
+            icon: const Icon(Icons.visibility_outlined),
+          ),
+          IconButton(
+            tooltip: 'Add layer',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Multiple layers are coming next.'),
+                ),
+              );
+            },
+            icon: const Icon(Icons.add_box_outlined),
+          ),
+        ],
       ),
     );
   }
@@ -1477,30 +1052,6 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     return result;
-  }
-}
-
-class _LayerActionButton extends StatelessWidget {
-  const _LayerActionButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-      padding: const EdgeInsets.all(7),
-      icon: Icon(icon, size: 19),
-    );
   }
 }
 

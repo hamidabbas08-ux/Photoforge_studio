@@ -41,12 +41,6 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _flipVertical = false;
   double? _cropAspectRatio;
 
-  Offset _gestureStartOffset = Offset.zero;
-  Offset _gestureStartFocalPoint = Offset.zero;
-  double _gestureStartScaleX = 1;
-  double _gestureStartScaleY = 1;
-  double _gestureStartRotation = 0;
-
   final List<_EditorSnapshot> _undoHistory = [];
   final List<_EditorSnapshot> _redoHistory = [];
 
@@ -323,42 +317,6 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  void _onLayerScaleStart(ScaleStartDetails details, EditorLayer layer) {
-    if (layer.isLocked || _selectedTool != 0) {
-      return;
-    }
-
-    _layerController.selectLayer(layer.id);
-
-    _gestureStartOffset = layer.offset;
-    _gestureStartFocalPoint = details.localFocalPoint;
-    _gestureStartScaleX = layer.scaleX;
-    _gestureStartScaleY = layer.scaleY;
-    _gestureStartRotation = layer.rotation;
-  }
-
-  void _onLayerScaleUpdate(ScaleUpdateDetails details, EditorLayer layer) {
-    if (layer.isLocked || _selectedTool != 0) {
-      return;
-    }
-
-    final Offset movement = details.localFocalPoint - _gestureStartFocalPoint;
-
-    final double newScaleX = _gestureStartScaleX * details.scale;
-
-    final double newScaleY = _gestureStartScaleY * details.scale;
-
-    final double newRotation = _gestureStartRotation + details.rotation;
-
-    _layerController.setLayerTransform(
-      layerId: layer.id,
-      offset: _gestureStartOffset + movement,
-      scaleX: newScaleX,
-      scaleY: newScaleY,
-      rotation: newRotation,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -481,8 +439,6 @@ class _EditorScreenState extends State<EditorScreen> {
           );
 
           return InteractiveViewer(
-            panEnabled: _selectedTool != 0,
-            scaleEnabled: _selectedTool != 0,
             minScale: 0.35,
             maxScale: 8,
             boundaryMargin: const EdgeInsets.all(300),
@@ -714,19 +670,6 @@ class _EditorScreenState extends State<EditorScreen> {
       child: layerImage,
     );
 
-    if (selected && _selectedTool == 0 && !layer.isLocked) {
-      layerImage = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onScaleStart: (details) {
-          _onLayerScaleStart(details, layer);
-        },
-        onScaleUpdate: (details) {
-          _onLayerScaleUpdate(details, layer);
-        },
-        child: layerImage,
-      );
-    }
-
     if (layer.blendMode != EditorBlendMode.normal) {
       layerImage = LayerBlendMask(
         blendMode: LayerBlendMapper.toFlutterBlendMode(layer.blendMode),
@@ -739,7 +682,7 @@ class _EditorScreenState extends State<EditorScreen> {
         fit: StackFit.expand,
         children: [
           layerImage,
-          if (selected && (_selectedTool == 0 || _selectedTool == 7))
+          if (selected && _selectedTool == 7)
             IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(

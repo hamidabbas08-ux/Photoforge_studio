@@ -11,8 +11,6 @@ import '../models/editor_image.dart';
 import '../models/photo_filter_preset.dart';
 import '../layers/controllers/layer_controller.dart';
 import '../layers/models/editor_layer.dart';
-import '../layers/models/layer_blend_mapper.dart';
-import '../layers/widgets/layer_blend_mask.dart';
 
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key, required this.projectName, this.initialImage});
@@ -40,12 +38,6 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _flipHorizontal = false;
   bool _flipVertical = false;
   double? _cropAspectRatio;
-
-  Offset _gestureStartOffset = Offset.zero;
-  Offset _gestureStartFocalPoint = Offset.zero;
-  double _gestureStartScaleX = 1;
-  double _gestureStartScaleY = 1;
-  double _gestureStartRotation = 0;
 
   final List<_EditorSnapshot> _undoHistory = [];
   final List<_EditorSnapshot> _redoHistory = [];
@@ -323,42 +315,6 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  void _onLayerScaleStart(ScaleStartDetails details, EditorLayer layer) {
-    if (layer.isLocked || _selectedTool != 0) {
-      return;
-    }
-
-    _layerController.selectLayer(layer.id);
-
-    _gestureStartOffset = layer.offset;
-    _gestureStartFocalPoint = details.localFocalPoint;
-    _gestureStartScaleX = layer.scaleX;
-    _gestureStartScaleY = layer.scaleY;
-    _gestureStartRotation = layer.rotation;
-  }
-
-  void _onLayerScaleUpdate(ScaleUpdateDetails details, EditorLayer layer) {
-    if (layer.isLocked || _selectedTool != 0) {
-      return;
-    }
-
-    final Offset movement = details.localFocalPoint - _gestureStartFocalPoint;
-
-    final double newScaleX = _gestureStartScaleX * details.scale;
-
-    final double newScaleY = _gestureStartScaleY * details.scale;
-
-    final double newRotation = _gestureStartRotation + details.rotation;
-
-    _layerController.setLayerTransform(
-      layerId: layer.id,
-      offset: _gestureStartOffset + movement,
-      scaleX: newScaleX,
-      scaleY: newScaleY,
-      rotation: newRotation,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -481,8 +437,6 @@ class _EditorScreenState extends State<EditorScreen> {
           );
 
           return InteractiveViewer(
-            panEnabled: _selectedTool != 0,
-            scaleEnabled: _selectedTool != 0,
             minScale: 0.35,
             maxScale: 8,
             boundaryMargin: const EdgeInsets.all(300),
@@ -602,45 +556,18 @@ class _EditorScreenState extends State<EditorScreen> {
               transform: Matrix4.identity()
                 ..scaleByDouble(scaleX, scaleY, 1, 1)
                 ..rotateZ(_quarterTurns * math.pi / 2),
-              child: AnimatedBuilder(
-                animation: _layerController,
-                builder: (context, child) {
-                  final List<EditorLayer> visibleLayers = _layerController
-                      .layers
-                      .where(
-                        (layer) => layer.isVisible && layer.imagePath != null,
-                      )
-                      .toList();
-
-                  if (visibleLayers.isEmpty) {
-                    return const Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.visibility_off_outlined,
-                            color: Colors.black45,
-                            size: 34,
-                          ),
-                          SizedBox(height: 9),
-                          Text(
-                            'All layers are hidden',
-                            style: TextStyle(
-                              color: Colors.black54,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      for (final EditorLayer layer in visibleLayers)
-                        _buildCanvasLayer(layer),
-                    ],
+              child: Image.file(
+                File(image.path),
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.high,
+                gaplessPlayback: true,
+                errorBuilder: (context, error, stackTrace) {
+                  return Center(
+                    child: Text(
+                      'Unable to display image.\n$error',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.black87),
+                    ),
                   );
                 },
               ),
@@ -653,12 +580,8 @@ class _EditorScreenState extends State<EditorScreen> {
               color: Colors.black54,
               borderRadius: BorderRadius.circular(10),
               child: IconButton(
-                tooltip: 'Replace complete project image',
-                onPressed: _isImporting
-                    ? null
-                    : () {
-                        _pickImage();
-                      },
+                tooltip: 'Replace photo',
+                onPressed: _pickImage,
                 icon: _isImporting
                     ? const SizedBox(
                         width: 19,
@@ -669,84 +592,6 @@ class _EditorScreenState extends State<EditorScreen> {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCanvasLayer(EditorLayer layer) {
-    final String? imagePath = layer.imagePath;
-
-    if (imagePath == null) {
-      return const SizedBox.shrink();
-    }
-
-    final bool selected = layer.id == _layerController.selectedLayerId;
-
-    Widget layerImage = Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..translateByDouble(layer.offset.dx, layer.offset.dy, 0, 1)
-        ..rotateZ(layer.rotation)
-        ..scaleByDouble(layer.scaleX, layer.scaleY, 1, 1),
-      child: Image.file(
-        File(imagePath),
-        fit: BoxFit.cover,
-        filterQuality: FilterQuality.high,
-        gaplessPlayback: true,
-        errorBuilder: (context, error, stackTrace) {
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Text(
-                'Layer image unavailable\n$error',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.black87, fontSize: 11),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-
-    layerImage = Opacity(
-      opacity: layer.opacity.clamp(0.0, 1.0),
-      child: layerImage,
-    );
-
-    if (selected && _selectedTool == 0 && !layer.isLocked) {
-      layerImage = GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onScaleStart: (details) {
-          _onLayerScaleStart(details, layer);
-        },
-        onScaleUpdate: (details) {
-          _onLayerScaleUpdate(details, layer);
-        },
-        child: layerImage,
-      );
-    }
-
-    if (layer.blendMode != EditorBlendMode.normal) {
-      layerImage = LayerBlendMask(
-        blendMode: LayerBlendMapper.toFlutterBlendMode(layer.blendMode),
-        child: layerImage,
-      );
-    }
-
-    return Positioned.fill(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          layerImage,
-          if (selected && (_selectedTool == 0 || _selectedTool == 7))
-            IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: AppTheme.primary, width: 2),
-                ),
-              ),
-            ),
         ],
       ),
     );
