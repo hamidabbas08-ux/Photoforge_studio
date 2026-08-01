@@ -9,16 +9,24 @@ import '../../../services/export/image_export_service.dart';
 import '../../../services/image/image_import_service.dart';
 import '../models/editor_image.dart';
 import '../models/photo_filter_preset.dart';
+import '../project/models/photoforge_project.dart';
+import '../project/services/project_file_service.dart';
 import '../layers/controllers/layer_controller.dart';
 import '../layers/models/editor_layer.dart';
 import '../layers/models/layer_blend_mapper.dart';
 import '../layers/widgets/layer_blend_mask.dart';
 
 class EditorScreen extends StatefulWidget {
-  const EditorScreen({super.key, required this.projectName, this.initialImage});
+  const EditorScreen({
+    super.key,
+    required this.projectName,
+    this.initialImage,
+    this.initialProject,
+  });
 
   final String projectName;
   final EditorImage? initialImage;
+  final PhotoForgeProject? initialProject;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -30,6 +38,7 @@ class _EditorScreenState extends State<EditorScreen> {
   EditorImage? _editorImage;
   bool _isImporting = false;
   bool _isExporting = false;
+  bool _isSavingProject = false;
   Size _lastCanvasSize = Size.zero;
 
   double _brightness = 0;
@@ -65,7 +74,87 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   void initState() {
     super.initState();
-    _editorImage = widget.initialImage;
+
+    final PhotoForgeProject? project = widget.initialProject;
+
+    if (project != null) {
+      _restoreProject(project);
+    } else {
+      _editorImage = widget.initialImage;
+
+      final String? imagePath = widget.initialImage?.path;
+
+      if (imagePath != null && imagePath.isNotEmpty) {
+        _layerController.replaceAllWithImage(imagePath);
+      }
+    }
+  }
+
+  void _restoreProject(PhotoForgeProject project) {
+    final List<EditorLayer> restoredLayers = project.layers
+        .map(
+          (PhotoForgeProjectLayer layer) => EditorLayer(
+            id: layer.id,
+            name: layer.name,
+            type: _parseLayerType(layer.type),
+            imagePath: layer.imagePath,
+            isVisible: layer.isVisible,
+            isLocked: layer.isLocked,
+            opacity: layer.opacity,
+            blendMode: _parseBlendMode(layer.blendMode),
+            offset: Offset(layer.offsetX, layer.offsetY),
+            scaleX: layer.scaleX,
+            scaleY: layer.scaleY,
+            rotation: layer.rotation,
+          ),
+        )
+        .toList();
+
+    _layerController.replaceAllLayers(layers: restoredLayers);
+
+    String? baseImagePath;
+
+    for (final EditorLayer layer in restoredLayers) {
+      final String? imagePath = layer.imagePath;
+
+      if (imagePath != null &&
+          imagePath.isNotEmpty &&
+          File(imagePath).existsSync()) {
+        baseImagePath = imagePath;
+        break;
+      }
+    }
+
+    if (baseImagePath != null) {
+      _editorImage = EditorImage(
+        path: baseImagePath,
+        width: project.canvasWidth,
+        height: project.canvasHeight,
+      );
+    }
+
+    _brightness = project.brightness;
+    _contrast = project.contrast;
+    _saturation = project.saturation;
+    _selectedFilterId = project.filterId;
+    _quarterTurns = project.quarterTurns;
+    _flipHorizontal = project.flipHorizontal;
+    _flipVertical = project.flipVertical;
+    _cropAspectRatio = project.cropAspectRatio;
+  }
+
+  EditorLayerType _parseLayerType(String value) {
+    return EditorLayerType.values.firstWhere(
+      (EditorLayerType type) => type.name == value,
+      orElse: () => EditorLayerType.image,
+    );
+  }
+
+  EditorBlendMode _parseBlendMode(String value) {
+    return EditorBlendMode.values.firstWhere(
+      (EditorBlendMode mode) => mode.name == value,
+      orElse: () => EditorBlendMode.normal,
+    );
   }
 
   @override
@@ -376,6 +465,84 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  PhotoForgeProject _createProjectDocument() {
+    final EditorImage? image = _editorImage;
+    final DateTime now = DateTime.now();
+
+    return PhotoForgeProject(
+      version: 1,
+      projectName: widget.projectName,
+      createdAt: now,
+      updatedAt: now,
+      canvasWidth: image?.width ?? 1080,
+      canvasHeight: image?.height ?? 1080,
+      layers: [
+        for (final EditorLayer layer in _layerController.layers)
+          PhotoForgeProjectLayer(
+            id: layer.id,
+            name: layer.name,
+            type: layer.type.name,
+            imagePath: layer.imagePath,
+            isVisible: layer.isVisible,
+            isLocked: layer.isLocked,
+            opacity: layer.opacity,
+            blendMode: layer.blendMode.name,
+            offsetX: layer.offset.dx,
+            offsetY: layer.offset.dy,
+            scaleX: layer.scaleX,
+            scaleY: layer.scaleY,
+            rotation: layer.rotation,
+          ),
+      ],
+      brightness: _brightness,
+      contrast: _contrast,
+      saturation: _saturation,
+      filterId: _selectedFilterId,
+      quarterTurns: _quarterTurns,
+      flipHorizontal: _flipHorizontal,
+      flipVertical: _flipVertical,
+      cropAspectRatio: _cropAspectRatio,
+    );
+  }
+
+  Future<void> _saveEditableProject() async {
+    if (_isSavingProject || !_layerController.hasLayers) {
+      return;
+    }
+
+    setState(() => _isSavingProject = true);
+
+    try {
+      final PhotoForgeProject project = _createProjectDocument();
+
+      final File savedFile = await ProjectFileService.instance.saveProject(
+        project,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Project saved: ${savedFile.path.split('/').last}'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Project could not be saved: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSavingProject = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -445,6 +612,19 @@ class _EditorScreenState extends State<EditorScreen> {
             tooltip: 'Redo',
             onPressed: _redoHistory.isEmpty ? null : _redo,
             icon: const Icon(Icons.redo_rounded),
+          ),
+          IconButton(
+            tooltip: 'Save editable project',
+            onPressed: image == null || _isSavingProject
+                ? null
+                : _saveEditableProject,
+            icon: _isSavingProject
+                ? const SizedBox(
+                    width: 19,
+                    height: 19,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_outlined),
           ),
           FilledButton(
             onPressed: image == null || _isExporting ? null : _showExportSheet,

@@ -1,9 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../services/image/image_import_service.dart';
 import '../../editor/models/editor_image.dart';
 import '../../editor/screens/editor_screen.dart';
+import '../../editor/project/models/photoforge_project.dart';
+import '../../editor/project/services/project_file_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,17 +18,100 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _isImporting = false;
+  bool _isLoadingProjects = true;
+  List<File> _recentProjects = <File>[];
 
-  void _openEditor({
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentProjects();
+  }
+
+  Future<void> _loadRecentProjects() async {
+    try {
+      final List<File> projects = await ProjectFileService.instance
+          .listProjects();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _recentProjects = projects.take(8).toList();
+        _isLoadingProjects = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _recentProjects = <File>[];
+        _isLoadingProjects = false;
+      });
+
+      debugPrint('Could not load recent projects: $error');
+    }
+  }
+
+  Future<void> _openSavedProject(File file) async {
+    try {
+      final PhotoForgeProject project = await ProjectFileService.instance
+          .loadProject(file);
+
+      if (!mounted) {
+        return;
+      }
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => EditorScreen(
+            projectName: project.projectName,
+            initialProject: project,
+          ),
+        ),
+      );
+
+      await _loadRecentProjects();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open project: $error')));
+    }
+  }
+
+  Future<void> _deleteSavedProject(File file) async {
+    try {
+      await ProjectFileService.instance.deleteProject(file);
+
+      await _loadRecentProjects();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete project: $error')),
+      );
+    }
+  }
+
+  Future<void> _openEditor({
     String projectName = 'Untitled Project',
     EditorImage? editorImage,
-  }) {
-    Navigator.of(context).push(
+  }) async {
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) =>
             EditorScreen(projectName: projectName, initialImage: editorImage),
       ),
     );
+
+    await _loadRecentProjects();
   }
 
   Future<void> _openPhoto() async {
@@ -42,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      _openEditor(projectName: 'Photo Project', editorImage: image);
+      await _openEditor(projectName: 'Photo Project', editorImage: image);
     } catch (error) {
       if (!mounted) {
         return;
@@ -144,9 +231,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            const SliverPadding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 30),
-              sliver: SliverToBoxAdapter(child: _EmptyRecentProjects()),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
+              sliver: SliverToBoxAdapter(
+                child: _RecentProjectsSection(
+                  isLoading: _isLoadingProjects,
+                  projects: _recentProjects,
+                  onOpen: _openSavedProject,
+                  onDelete: _deleteSavedProject,
+                ),
+              ),
             ),
           ],
         ),
@@ -349,6 +443,123 @@ class _ActionCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _RecentProjectsSection extends StatelessWidget {
+  const _RecentProjectsSection({
+    required this.isLoading,
+    required this.projects,
+    required this.onOpen,
+    required this.onDelete,
+  });
+
+  final bool isLoading;
+  final List<File> projects;
+  final ValueChanged<File> onOpen;
+  final ValueChanged<File> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return Container(
+        height: 135,
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white10),
+        ),
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (projects.isEmpty) {
+      return const _EmptyRecentProjects();
+    }
+
+    return Column(
+      children: [
+        for (final File file in projects)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Material(
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () {
+                  onOpen(file);
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white10),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceLight,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.layers_outlined,
+                          color: AppTheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 13),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _projectName(file),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Editable layered project',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Delete project',
+                        onPressed: () {
+                          onDelete(file);
+                        },
+                        icon: const Icon(Icons.delete_outline_rounded),
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _projectName(File file) {
+    final String fileName = file.path.split('/').last;
+
+    return fileName.replaceAll('.photoforge', '').replaceAll('_', ' ');
   }
 }
 

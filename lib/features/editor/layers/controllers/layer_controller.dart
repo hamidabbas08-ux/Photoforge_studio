@@ -206,6 +206,25 @@ class LayerController extends ChangeNotifier {
     );
   }
 
+  void replaceAllLayers({
+    required List<EditorLayer> layers,
+    String? selectedLayerId,
+  }) {
+    _layers
+      ..clear()
+      ..addAll(layers);
+
+    if (_layers.isEmpty) {
+      _selectedLayerId = null;
+    } else if (selectedLayerId != null && _containsLayer(selectedLayerId)) {
+      _selectedLayerId = selectedLayerId;
+    } else {
+      _selectedLayerId = _layers.last.id;
+    }
+
+    notifyListeners();
+  }
+
   void replaceAllWithImage(String imagePath) {
     _layers
       ..clear()
