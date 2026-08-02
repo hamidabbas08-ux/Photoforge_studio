@@ -42,11 +42,6 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isSavingProject = false;
 
   bool _isCreatingTextLayer = false;
-  double _textFontSize = 72;
-  Color _textColor = Colors.white;
-  bool _textBold = true;
-  bool _textItalic = false;
-  TextAlign _textAlignment = TextAlign.center;
   Size _lastCanvasSize = Size.zero;
 
   double _brightness = 0;
@@ -114,6 +109,12 @@ class _EditorScreenState extends State<EditorScreen> {
             scaleX: layer.scaleX,
             scaleY: layer.scaleY,
             rotation: layer.rotation,
+            textContent: layer.textContent,
+            textFontSize: layer.textFontSize,
+            textColorValue: layer.textColorValue,
+            textBold: layer.textBold,
+            textItalic: layer.textItalic,
+            textAlignment: layer.textAlignment,
           ),
         )
         .toList();
@@ -320,19 +321,43 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _showAddTextDialog() async {
-    if (_editorImage == null || _isCreatingTextLayer) {
+    await _showTextLayerDialog();
+  }
+
+  Future<void> _showEditTextDialog(EditorLayer layer) async {
+    if (layer.type != EditorLayerType.text) {
       return;
     }
 
-    final TextEditingController textController = TextEditingController();
+    await _showTextLayerDialog(layer: layer);
+  }
 
-    final bool? create = await showDialog<bool>(
+  Future<void> _showTextLayerDialog({EditorLayer? layer}) async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingTextLayer) {
+      return;
+    }
+
+    final bool isEditing = layer != null;
+
+    final TextEditingController textController = TextEditingController(
+      text: layer?.textContent ?? layer?.name ?? '',
+    );
+
+    double fontSize = layer?.textFontSize ?? 72;
+    Color textColor = Color(layer?.textColorValue ?? Colors.white.toARGB32());
+    bool bold = layer?.textBold ?? true;
+    bool italic = layer?.textItalic ?? false;
+    TextAlign alignment = _parseTextAlignment(layer?.textAlignment);
+
+    final bool? shouldSave = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setDialogState) {
             return AlertDialog(
-              title: const Text('Add Text Layer'),
+              title: Text(isEditing ? 'Edit Text Layer' : 'Add Text Layer'),
               content: SingleChildScrollView(
                 child: SizedBox(
                   width: 420,
@@ -360,14 +385,14 @@ class _EditorScreenState extends State<EditorScreen> {
                           ),
                           Expanded(
                             child: Slider(
-                              value: _textFontSize,
+                              value: fontSize,
                               min: 24,
                               max: 180,
                               divisions: 26,
-                              label: _textFontSize.round().toString(),
+                              label: fontSize.round().toString(),
                               onChanged: (double value) {
                                 setDialogState(() {
-                                  _textFontSize = value;
+                                  fontSize = value;
                                 });
                               },
                             ),
@@ -375,7 +400,7 @@ class _EditorScreenState extends State<EditorScreen> {
                           SizedBox(
                             width: 42,
                             child: Text(
-                              _textFontSize.round().toString(),
+                              fontSize.round().toString(),
                               textAlign: TextAlign.end,
                             ),
                           ),
@@ -401,7 +426,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             InkWell(
                               onTap: () {
                                 setDialogState(() {
-                                  _textColor = color;
+                                  textColor = color;
                                 });
                               },
                               borderRadius: BorderRadius.circular(22),
@@ -412,13 +437,17 @@ class _EditorScreenState extends State<EditorScreen> {
                                   color: color,
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: _textColor == color
+                                    color:
+                                        textColor.toARGB32() == color.toARGB32()
                                         ? AppTheme.primary
                                         : Colors.white24,
-                                    width: _textColor == color ? 3 : 1,
+                                    width:
+                                        textColor.toARGB32() == color.toARGB32()
+                                        ? 3
+                                        : 1,
                                   ),
                                 ),
-                                child: _textColor == color
+                                child: textColor.toARGB32() == color.toARGB32()
                                     ? Icon(
                                         Icons.check_rounded,
                                         color: color.computeLuminance() > 0.5
@@ -434,31 +463,32 @@ class _EditorScreenState extends State<EditorScreen> {
                       const SizedBox(height: 16),
                       Wrap(
                         spacing: 8,
+                        runSpacing: 8,
                         children: [
                           FilterChip(
                             label: const Text('Bold'),
-                            selected: _textBold,
+                            selected: bold,
                             onSelected: (bool selected) {
                               setDialogState(() {
-                                _textBold = selected;
+                                bold = selected;
                               });
                             },
                           ),
                           FilterChip(
                             label: const Text('Italic'),
-                            selected: _textItalic,
+                            selected: italic,
                             onSelected: (bool selected) {
                               setDialogState(() {
-                                _textItalic = selected;
+                                italic = selected;
                               });
                             },
                           ),
                           ChoiceChip(
                             label: const Icon(Icons.format_align_left_rounded),
-                            selected: _textAlignment == TextAlign.left,
+                            selected: alignment == TextAlign.left,
                             onSelected: (_) {
                               setDialogState(() {
-                                _textAlignment = TextAlign.left;
+                                alignment = TextAlign.left;
                               });
                             },
                           ),
@@ -466,19 +496,19 @@ class _EditorScreenState extends State<EditorScreen> {
                             label: const Icon(
                               Icons.format_align_center_rounded,
                             ),
-                            selected: _textAlignment == TextAlign.center,
+                            selected: alignment == TextAlign.center,
                             onSelected: (_) {
                               setDialogState(() {
-                                _textAlignment = TextAlign.center;
+                                alignment = TextAlign.center;
                               });
                             },
                           ),
                           ChoiceChip(
                             label: const Icon(Icons.format_align_right_rounded),
-                            selected: _textAlignment == TextAlign.right,
+                            selected: alignment == TextAlign.right,
                             onSelected: (_) {
                               setDialogState(() {
-                                _textAlignment = TextAlign.right;
+                                alignment = TextAlign.right;
                               });
                             },
                           ),
@@ -503,8 +533,10 @@ class _EditorScreenState extends State<EditorScreen> {
 
                     Navigator.of(dialogContext).pop(true);
                   },
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add Text'),
+                  icon: Icon(
+                    isEditing ? Icons.save_rounded : Icons.add_rounded,
+                  ),
+                  label: Text(isEditing ? 'Save Changes' : 'Add Text'),
                 ),
               ],
             );
@@ -513,17 +545,33 @@ class _EditorScreenState extends State<EditorScreen> {
       },
     );
 
-    final String text = textController.text.trim();
+    final String newText = textController.text.trim();
     textController.dispose();
 
-    if (create != true || text.isEmpty || !mounted) {
+    if (shouldSave != true || newText.isEmpty || !mounted) {
       return;
     }
 
-    await _createTextLayer(text);
+    await _renderAndSaveTextLayer(
+      existingLayer: layer,
+      text: newText,
+      fontSize: fontSize,
+      color: textColor,
+      bold: bold,
+      italic: italic,
+      alignment: alignment,
+    );
   }
 
-  Future<void> _createTextLayer(String text) async {
+  Future<void> _renderAndSaveTextLayer({
+    required EditorLayer? existingLayer,
+    required String text,
+    required double fontSize,
+    required Color color,
+    required bool bold,
+    required bool italic,
+    required TextAlign alignment,
+  }) async {
     final EditorImage? image = _editorImage;
 
     if (image == null || _isCreatingTextLayer) {
@@ -537,32 +585,54 @@ class _EditorScreenState extends State<EditorScreen> {
         text: text,
         canvasWidth: image.width,
         canvasHeight: image.height,
-        fontSize: _textFontSize,
-        color: _textColor,
-        bold: _textBold,
-        italic: _textItalic,
-        textAlign: _textAlignment,
+        fontSize: fontSize,
+        color: color,
+        bold: bold,
+        italic: italic,
+        textAlign: alignment,
       );
 
       if (!mounted) {
         return;
       }
 
-      _applyLayerAction(
-        () => _layerController.addTextLayer(
-          imagePath: textImage.path,
-          text: text,
-        ),
-      );
+      if (existingLayer == null) {
+        _applyLayerAction(
+          () => _layerController.addTextLayer(
+            imagePath: textImage.path,
+            text: text,
+            fontSize: fontSize,
+            colorValue: color.toARGB32(),
+            bold: bold,
+            italic: italic,
+            textAlignment: alignment.name,
+          ),
+        );
+      } else {
+        _applyLayerAction(
+          () => _layerController.updateTextLayer(
+            layerId: existingLayer.id,
+            imagePath: textImage.path,
+            text: text,
+            fontSize: fontSize,
+            colorValue: color.toARGB32(),
+            bold: bold,
+            italic: italic,
+            textAlignment: alignment.name,
+          ),
+        );
+      }
 
       setState(() {
         _selectedTool = 0;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Text layer added'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(
+            existingLayer == null ? 'Text layer added' : 'Text layer updated',
+          ),
+          duration: const Duration(seconds: 2),
         ),
       );
     } catch (error) {
@@ -571,13 +641,20 @@ class _EditorScreenState extends State<EditorScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Text could not be added: $error')),
+        SnackBar(content: Text('Text could not be saved: $error')),
       );
     } finally {
       if (mounted) {
         setState(() => _isCreatingTextLayer = false);
       }
     }
+  }
+
+  TextAlign _parseTextAlignment(String? value) {
+    return TextAlign.values.firstWhere(
+      (TextAlign alignment) => alignment.name == value,
+      orElse: () => TextAlign.center,
+    );
   }
 
   Future<void> _showExportSheet() async {
@@ -778,6 +855,12 @@ class _EditorScreenState extends State<EditorScreen> {
             scaleX: layer.scaleX,
             scaleY: layer.scaleY,
             rotation: layer.rotation,
+            textContent: layer.textContent,
+            textFontSize: layer.textFontSize,
+            textColorValue: layer.textColorValue,
+            textBold: layer.textBold,
+            textItalic: layer.textItalic,
+            textAlignment: layer.textAlignment,
           ),
       ],
       brightness: _brightness,
@@ -1644,6 +1727,23 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     const SizedBox(height: 20),
 
+                    if (currentLayer.type == EditorLayerType.text) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: currentLayer.isLocked
+                              ? null
+                              : () async {
+                                  Navigator.of(sheetContext).pop();
+                                  await _showEditTextDialog(currentLayer);
+                                },
+                          icon: const Icon(Icons.edit_rounded),
+                          label: const Text('Edit Text'),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
                     const Text(
                       'Opacity',
                       style: TextStyle(fontWeight: FontWeight.w800),
@@ -2033,6 +2133,9 @@ class _EditorScreenState extends State<EditorScreen> {
                                   Text(
                                     selectedLayer.isLocked
                                         ? 'Layer locked'
+                                        : selectedLayer.type ==
+                                              EditorLayerType.text
+                                        ? 'Editable text layer selected'
                                         : 'Image layer selected',
                                     style: const TextStyle(
                                       color: AppTheme.textSecondary,

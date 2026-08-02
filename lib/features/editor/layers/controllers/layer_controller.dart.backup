@@ -52,28 +52,16 @@ class LayerController extends ChangeNotifier {
     return layer;
   }
 
-  EditorLayer addTextLayer({
-    required String imagePath,
-    required String text,
-    required double fontSize,
-    required int colorValue,
-    required bool bold,
-    required bool italic,
-    required String textAlignment,
-  }) {
+  EditorLayer addTextLayer({required String imagePath, required String text}) {
     final String cleanText = text.trim();
 
     final EditorLayer layer = EditorLayer(
       id: _createLayerId(),
-      name: _textLayerName(cleanText),
+      name: cleanText.length > 24
+          ? '${cleanText.substring(0, 24)}...'
+          : cleanText,
       type: EditorLayerType.text,
       imagePath: imagePath,
-      textContent: cleanText,
-      textFontSize: fontSize,
-      textColorValue: colorValue,
-      textBold: bold,
-      textItalic: italic,
-      textAlignment: textAlignment,
     );
 
     _layers.add(layer);
@@ -81,45 +69,6 @@ class LayerController extends ChangeNotifier {
     notifyListeners();
 
     return layer;
-  }
-
-  void updateTextLayer({
-    required String layerId,
-    required String imagePath,
-    required String text,
-    required double fontSize,
-    required int colorValue,
-    required bool bold,
-    required bool italic,
-    required String textAlignment,
-  }) {
-    final String cleanText = text.trim();
-
-    if (cleanText.isEmpty) {
-      return;
-    }
-
-    _updateLayer(
-      layerId,
-      (EditorLayer layer) => layer.copyWith(
-        name: _textLayerName(cleanText),
-        imagePath: imagePath,
-        textContent: cleanText,
-        textFontSize: fontSize,
-        textColorValue: colorValue,
-        textBold: bold,
-        textItalic: italic,
-        textAlignment: textAlignment,
-      ),
-    );
-  }
-
-  String _textLayerName(String text) {
-    if (text.length > 24) {
-      return '${text.substring(0, 24)}...';
-    }
-
-    return text;
   }
 
   void selectLayer(String layerId) {

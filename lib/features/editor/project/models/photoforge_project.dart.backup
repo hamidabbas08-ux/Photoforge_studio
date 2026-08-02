@@ -108,12 +108,6 @@ class PhotoForgeProjectLayer {
     required this.scaleX,
     required this.scaleY,
     required this.rotation,
-    this.textContent,
-    this.textFontSize,
-    this.textColorValue,
-    this.textBold,
-    this.textItalic,
-    this.textAlignment,
   });
 
   final String id;
@@ -132,13 +126,6 @@ class PhotoForgeProjectLayer {
   final double scaleY;
   final double rotation;
 
-  final String? textContent;
-  final double? textFontSize;
-  final int? textColorValue;
-  final bool? textBold;
-  final bool? textItalic;
-  final String? textAlignment;
-
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,
@@ -154,12 +141,6 @@ class PhotoForgeProjectLayer {
       'scaleX': scaleX,
       'scaleY': scaleY,
       'rotation': rotation,
-      'textContent': textContent,
-      'textFontSize': textFontSize,
-      'textColorValue': textColorValue,
-      'textBold': textBold,
-      'textItalic': textItalic,
-      'textAlignment': textAlignment,
     };
   }
 
@@ -180,12 +161,6 @@ class PhotoForgeProjectLayer {
       scaleX: (json['scaleX'] as num?)?.toDouble() ?? 1,
       scaleY: (json['scaleY'] as num?)?.toDouble() ?? 1,
       rotation: (json['rotation'] as num?)?.toDouble() ?? 0,
-      textContent: json['textContent'] as String?,
-      textFontSize: (json['textFontSize'] as num?)?.toDouble(),
-      textColorValue: (json['textColorValue'] as num?)?.toInt(),
-      textBold: json['textBold'] as bool?,
-      textItalic: json['textItalic'] as bool?,
-      textAlignment: json['textAlignment'] as String?,
     );
   }
 }

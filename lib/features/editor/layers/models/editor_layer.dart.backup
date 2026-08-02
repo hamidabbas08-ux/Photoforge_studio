@@ -28,12 +28,6 @@ class EditorLayer {
     this.scaleX = 1,
     this.scaleY = 1,
     this.rotation = 0,
-    this.textContent,
-    this.textFontSize,
-    this.textColorValue,
-    this.textBold,
-    this.textItalic,
-    this.textAlignment,
   });
 
   final String id;
@@ -51,13 +45,6 @@ class EditorLayer {
   final double scaleY;
   final double rotation;
 
-  final String? textContent;
-  final double? textFontSize;
-  final int? textColorValue;
-  final bool? textBold;
-  final bool? textItalic;
-  final String? textAlignment;
-
   EditorLayer copyWith({
     String? id,
     String? name,
@@ -71,12 +58,6 @@ class EditorLayer {
     double? scaleX,
     double? scaleY,
     double? rotation,
-    String? textContent,
-    double? textFontSize,
-    int? textColorValue,
-    bool? textBold,
-    bool? textItalic,
-    String? textAlignment,
   }) {
     return EditorLayer(
       id: id ?? this.id,
@@ -91,12 +72,6 @@ class EditorLayer {
       scaleX: scaleX ?? this.scaleX,
       scaleY: scaleY ?? this.scaleY,
       rotation: rotation ?? this.rotation,
-      textContent: textContent ?? this.textContent,
-      textFontSize: textFontSize ?? this.textFontSize,
-      textColorValue: textColorValue ?? this.textColorValue,
-      textBold: textBold ?? this.textBold,
-      textItalic: textItalic ?? this.textItalic,
-      textAlignment: textAlignment ?? this.textAlignment,
     );
   }
 }
