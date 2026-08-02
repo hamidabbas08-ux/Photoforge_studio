@@ -14,6 +14,7 @@ import '../project/services/project_file_service.dart';
 import '../layers/controllers/layer_controller.dart';
 import '../layers/models/editor_layer.dart';
 import '../layers/models/layer_blend_mapper.dart';
+import '../layers/services/shape_layer_service.dart';
 import '../layers/services/text_layer_service.dart';
 import '../layers/widgets/layer_blend_mask.dart';
 
@@ -42,6 +43,7 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isSavingProject = false;
 
   bool _isCreatingTextLayer = false;
+  bool _isCreatingShapeLayer = false;
   Size _lastCanvasSize = Size.zero;
 
   double _brightness = 0;
@@ -71,6 +73,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _EditorTool('Filters', Icons.filter_vintage_outlined),
     _EditorTool('Retouch', Icons.auto_fix_high_rounded),
     _EditorTool('Text', Icons.text_fields_rounded),
+    _EditorTool('Shapes', Icons.category_outlined),
     _EditorTool('Layers', Icons.layers_outlined),
   ];
 
@@ -655,6 +658,310 @@ class _EditorScreenState extends State<EditorScreen> {
       (TextAlign alignment) => alignment.name == value,
       orElse: () => TextAlign.center,
     );
+  }
+
+  Future<void> _showAddShapeDialog() async {
+    if (_editorImage == null || _isCreatingShapeLayer) {
+      return;
+    }
+
+    ShapeLayerKind selectedKind = ShapeLayerKind.rectangle;
+    Color fillColor = Colors.blue;
+    Color strokeColor = Colors.white;
+    double strokeWidth = 8;
+    double cornerRadius = 28;
+
+    final bool? shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Shape Layer'),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ChoiceChip(
+                            avatar: const Icon(Icons.rectangle_outlined),
+                            label: const Text('Rectangle'),
+                            selected: selectedKind == ShapeLayerKind.rectangle,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                selectedKind = ShapeLayerKind.rectangle;
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            avatar: const Icon(Icons.circle_outlined),
+                            label: const Text('Circle'),
+                            selected: selectedKind == ShapeLayerKind.circle,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                selectedKind = ShapeLayerKind.circle;
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            avatar: const Icon(Icons.horizontal_rule_rounded),
+                            label: const Text('Line'),
+                            selected: selectedKind == ShapeLayerKind.line,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                selectedKind = ShapeLayerKind.line;
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            avatar: const Icon(Icons.arrow_forward_rounded),
+                            label: const Text('Arrow'),
+                            selected: selectedKind == ShapeLayerKind.arrow,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                selectedKind = ShapeLayerKind.arrow;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Fill color',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildShapeColorPicker(
+                        selectedColor: fillColor,
+                        onSelected: (Color color) {
+                          setDialogState(() {
+                            fillColor = color;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 18),
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Border / line color',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _buildShapeColorPicker(
+                        selectedColor: strokeColor,
+                        onSelected: (Color color) {
+                          setDialogState(() {
+                            strokeColor = color;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const SizedBox(width: 82, child: Text('Thickness')),
+                          Expanded(
+                            child: Slider(
+                              value: strokeWidth,
+                              min: 1,
+                              max: 50,
+                              divisions: 49,
+                              label: strokeWidth.round().toString(),
+                              onChanged: (double value) {
+                                setDialogState(() {
+                                  strokeWidth = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (selectedKind == ShapeLayerKind.rectangle)
+                        Row(
+                          children: [
+                            const SizedBox(width: 82, child: Text('Corners')),
+                            Expanded(
+                              child: Slider(
+                                value: cornerRadius,
+                                min: 0,
+                                max: 120,
+                                divisions: 24,
+                                label: cornerRadius.round().toString(),
+                                onChanged: (double value) {
+                                  setDialogState(() {
+                                    cornerRadius = value;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add Shape'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldCreate != true || !mounted) {
+      return;
+    }
+
+    await _createShapeLayer(
+      kind: selectedKind,
+      fillColor: fillColor,
+      strokeColor: strokeColor,
+      strokeWidth: strokeWidth,
+      cornerRadius: cornerRadius,
+    );
+  }
+
+  Widget _buildShapeColorPicker({
+    required Color selectedColor,
+    required ValueChanged<Color> onSelected,
+  }) {
+    const List<Color> colors = <Color>[
+      Colors.white,
+      Colors.black,
+      Colors.red,
+      Colors.orange,
+      Colors.yellow,
+      Colors.green,
+      Colors.cyan,
+      Colors.blue,
+      Colors.purple,
+      Colors.pink,
+    ];
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final Color color in colors)
+          InkWell(
+            onTap: () => onSelected(color),
+            borderRadius: BorderRadius.circular(22),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: selectedColor.toARGB32() == color.toARGB32()
+                      ? AppTheme.primary
+                      : Colors.white24,
+                  width: selectedColor.toARGB32() == color.toARGB32() ? 3 : 1,
+                ),
+              ),
+              child: selectedColor.toARGB32() == color.toARGB32()
+                  ? Icon(
+                      Icons.check_rounded,
+                      size: 20,
+                      color: color.computeLuminance() > 0.5
+                          ? Colors.black
+                          : Colors.white,
+                    )
+                  : null,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _createShapeLayer({
+    required ShapeLayerKind kind,
+    required Color fillColor,
+    required Color strokeColor,
+    required double strokeWidth,
+    required double cornerRadius,
+  }) async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingShapeLayer) {
+      return;
+    }
+
+    setState(() => _isCreatingShapeLayer = true);
+
+    try {
+      final File shapeImage = await ShapeLayerService.instance.createShapeLayer(
+        kind: kind,
+        canvasWidth: image.width,
+        canvasHeight: image.height,
+        fillColor: fillColor,
+        strokeColor: strokeColor,
+        strokeWidth: strokeWidth,
+        cornerRadius: cornerRadius,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      final String shapeName = switch (kind) {
+        ShapeLayerKind.rectangle => 'Rectangle',
+        ShapeLayerKind.circle => 'Circle',
+        ShapeLayerKind.line => 'Line',
+        ShapeLayerKind.arrow => 'Arrow',
+      };
+
+      _applyLayerAction(
+        () => _layerController.addShapeLayer(
+          imagePath: shapeImage.path,
+          shapeName: shapeName,
+        ),
+      );
+
+      setState(() {
+        _selectedTool = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$shapeName layer added'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Shape could not be added: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingShapeLayer = false);
+      }
+    }
   }
 
   Future<void> _showExportSheet() async {
@@ -1307,7 +1614,7 @@ class _EditorScreenState extends State<EditorScreen> {
         fit: StackFit.expand,
         children: [
           layerImage,
-          if (selected && (_selectedTool == 0 || _selectedTool == 7))
+          if (selected && (_selectedTool == 0 || _selectedTool == 8))
             IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
@@ -1372,6 +1679,40 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     if (_selectedTool == 7) {
+      return Container(
+        height: 74,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: const BoxDecoration(
+          color: AppTheme.surface,
+          border: Border(top: BorderSide(color: Colors.white10)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.category_outlined, color: AppTheme.primary),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Add rectangles, circles, lines and arrows',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _isCreatingShapeLayer ? null : _showAddShapeDialog,
+              icon: _isCreatingShapeLayer
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_rounded),
+              label: const Text('Add Shape'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_selectedTool == 8) {
       return _buildLayersPanel();
     }
 
@@ -2276,6 +2617,16 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     child: layer.imagePath == null
                         ? const CustomPaint(painter: _CheckerboardPainter())
+                        : layer.type == EditorLayerType.shape
+                        ? Container(
+                            color: Colors.black45,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.category_outlined,
+                              color: Colors.white,
+                              size: 30,
+                            ),
+                          )
                         : layer.type == EditorLayerType.text
                         ? Container(
                             color: Colors.black45,

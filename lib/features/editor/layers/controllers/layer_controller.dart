@@ -122,6 +122,24 @@ class LayerController extends ChangeNotifier {
     return text;
   }
 
+  EditorLayer addShapeLayer({
+    required String imagePath,
+    required String shapeName,
+  }) {
+    final EditorLayer layer = EditorLayer(
+      id: _createLayerId(),
+      name: shapeName,
+      type: EditorLayerType.shape,
+      imagePath: imagePath,
+    );
+
+    _layers.add(layer);
+    _selectedLayerId = layer.id;
+    notifyListeners();
+
+    return layer;
+  }
+
   void selectLayer(String layerId) {
     if (!_containsLayer(layerId)) {
       return;
