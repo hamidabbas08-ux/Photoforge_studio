@@ -14,6 +14,7 @@ import '../project/services/project_file_service.dart';
 import '../layers/controllers/layer_controller.dart';
 import '../layers/models/editor_layer.dart';
 import '../layers/models/layer_blend_mapper.dart';
+import '../layers/services/text_layer_service.dart';
 import '../layers/widgets/layer_blend_mask.dart';
 
 class EditorScreen extends StatefulWidget {
@@ -39,6 +40,13 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isImporting = false;
   bool _isExporting = false;
   bool _isSavingProject = false;
+
+  bool _isCreatingTextLayer = false;
+  double _textFontSize = 72;
+  Color _textColor = Colors.white;
+  bool _textBold = true;
+  bool _textItalic = false;
+  TextAlign _textAlignment = TextAlign.center;
   Size _lastCanvasSize = Size.zero;
 
   double _brightness = 0;
@@ -307,6 +315,267 @@ class _EditorScreenState extends State<EditorScreen> {
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
+      }
+    }
+  }
+
+  Future<void> _showAddTextDialog() async {
+    if (_editorImage == null || _isCreatingTextLayer) {
+      return;
+    }
+
+    final TextEditingController textController = TextEditingController();
+
+    final bool? create = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Text Layer'),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 420,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: textController,
+                        autofocus: true,
+                        minLines: 2,
+                        maxLines: 5,
+                        maxLength: 160,
+                        decoration: const InputDecoration(
+                          labelText: 'Text',
+                          hintText: 'Write something...',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        children: [
+                          const Text(
+                            'Size',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          Expanded(
+                            child: Slider(
+                              value: _textFontSize,
+                              min: 24,
+                              max: 180,
+                              divisions: 26,
+                              label: _textFontSize.round().toString(),
+                              onChanged: (double value) {
+                                setDialogState(() {
+                                  _textFontSize = value;
+                                });
+                              },
+                            ),
+                          ),
+                          SizedBox(
+                            width: 42,
+                            child: Text(
+                              _textFontSize.round().toString(),
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final Color color in <Color>[
+                            Colors.white,
+                            Colors.black,
+                            Colors.red,
+                            Colors.orange,
+                            Colors.yellow,
+                            Colors.green,
+                            Colors.cyan,
+                            Colors.blue,
+                            Colors.purple,
+                            Colors.pink,
+                          ])
+                            InkWell(
+                              onTap: () {
+                                setDialogState(() {
+                                  _textColor = color;
+                                });
+                              },
+                              borderRadius: BorderRadius.circular(22),
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: _textColor == color
+                                        ? AppTheme.primary
+                                        : Colors.white24,
+                                    width: _textColor == color ? 3 : 1,
+                                  ),
+                                ),
+                                child: _textColor == color
+                                    ? Icon(
+                                        Icons.check_rounded,
+                                        color: color.computeLuminance() > 0.5
+                                            ? Colors.black
+                                            : Colors.white,
+                                        size: 20,
+                                      )
+                                    : null,
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          FilterChip(
+                            label: const Text('Bold'),
+                            selected: _textBold,
+                            onSelected: (bool selected) {
+                              setDialogState(() {
+                                _textBold = selected;
+                              });
+                            },
+                          ),
+                          FilterChip(
+                            label: const Text('Italic'),
+                            selected: _textItalic,
+                            onSelected: (bool selected) {
+                              setDialogState(() {
+                                _textItalic = selected;
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Icon(Icons.format_align_left_rounded),
+                            selected: _textAlignment == TextAlign.left,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                _textAlignment = TextAlign.left;
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Icon(
+                              Icons.format_align_center_rounded,
+                            ),
+                            selected: _textAlignment == TextAlign.center,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                _textAlignment = TextAlign.center;
+                              });
+                            },
+                          ),
+                          ChoiceChip(
+                            label: const Icon(Icons.format_align_right_rounded),
+                            selected: _textAlignment == TextAlign.right,
+                            onSelected: (_) {
+                              setDialogState(() {
+                                _textAlignment = TextAlign.right;
+                              });
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    if (textController.text.trim().isEmpty) {
+                      return;
+                    }
+
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add Text'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final String text = textController.text.trim();
+    textController.dispose();
+
+    if (create != true || text.isEmpty || !mounted) {
+      return;
+    }
+
+    await _createTextLayer(text);
+  }
+
+  Future<void> _createTextLayer(String text) async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingTextLayer) {
+      return;
+    }
+
+    setState(() => _isCreatingTextLayer = true);
+
+    try {
+      final File textImage = await TextLayerService.instance.createTextLayer(
+        text: text,
+        canvasWidth: image.width,
+        canvasHeight: image.height,
+        fontSize: _textFontSize,
+        color: _textColor,
+        bold: _textBold,
+        italic: _textItalic,
+        textAlign: _textAlignment,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.addTextLayer(
+          imagePath: textImage.path,
+          text: text,
+        ),
+      );
+
+      setState(() {
+        _selectedTool = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Text layer added'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Text could not be added: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingTextLayer = false);
       }
     }
   }
@@ -983,6 +1252,40 @@ class _EditorScreenState extends State<EditorScreen> {
 
     if (_selectedTool == 4) {
       return _buildFiltersPanel();
+    }
+
+    if (_selectedTool == 6) {
+      return Container(
+        height: 74,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: const BoxDecoration(
+          color: AppTheme.surface,
+          border: Border(top: BorderSide(color: Colors.white10)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.text_fields_rounded, color: AppTheme.primary),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Add movable text as a new layer',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _isCreatingTextLayer ? null : _showAddTextDialog,
+              icon: _isCreatingTextLayer
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.add_rounded),
+              label: const Text('Add Text'),
+            ),
+          ],
+        ),
+      );
     }
 
     if (_selectedTool == 7) {
@@ -1870,6 +2173,16 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     child: layer.imagePath == null
                         ? const CustomPaint(painter: _CheckerboardPainter())
+                        : layer.type == EditorLayerType.text
+                        ? Container(
+                            color: Colors.black45,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.text_fields_rounded,
+                              color: Colors.white,
+                              size: 30,
+                            ),
+                          )
                         : ClipRRect(
                             borderRadius: BorderRadius.circular(9),
                             child: Image.file(

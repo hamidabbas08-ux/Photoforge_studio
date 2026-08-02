@@ -52,6 +52,25 @@ class LayerController extends ChangeNotifier {
     return layer;
   }
 
+  EditorLayer addTextLayer({required String imagePath, required String text}) {
+    final String cleanText = text.trim();
+
+    final EditorLayer layer = EditorLayer(
+      id: _createLayerId(),
+      name: cleanText.length > 24
+          ? '${cleanText.substring(0, 24)}...'
+          : cleanText,
+      type: EditorLayerType.text,
+      imagePath: imagePath,
+    );
+
+    _layers.add(layer);
+    _selectedLayerId = layer.id;
+    notifyListeners();
+
+    return layer;
+  }
+
   void selectLayer(String layerId) {
     if (!_containsLayer(layerId)) {
       return;
