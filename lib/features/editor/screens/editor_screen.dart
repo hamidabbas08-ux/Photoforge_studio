@@ -173,6 +173,8 @@ class _EditorScreenState extends State<EditorScreen> {
       flipHorizontal: _flipHorizontal,
       flipVertical: _flipVertical,
       cropAspectRatio: _cropAspectRatio,
+      layers: List<EditorLayer>.from(_layerController.layers),
+      selectedLayerId: _layerController.selectedLayerId,
     );
   }
 
@@ -196,6 +198,11 @@ class _EditorScreenState extends State<EditorScreen> {
       _flipHorizontal = snapshot.flipHorizontal;
       _flipVertical = snapshot.flipVertical;
       _cropAspectRatio = snapshot.cropAspectRatio;
+
+      _layerController.replaceAllLayers(
+        layers: List<EditorLayer>.from(snapshot.layers),
+        selectedLayerId: snapshot.selectedLayerId,
+      );
     });
   }
 
@@ -223,6 +230,15 @@ class _EditorScreenState extends State<EditorScreen> {
     _recordHistory();
 
     setState(action);
+  }
+
+  void _applyLayerAction(VoidCallback action) {
+    _recordHistory();
+    action();
+
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _resetAll() {
@@ -260,9 +276,9 @@ class _EditorScreenState extends State<EditorScreen> {
       }
 
       if (addAsLayer && _layerController.hasLayers) {
-        _layerController.addImageLayer(imagePath: image.path);
-
-        setState(() {});
+        _applyLayerAction(
+          () => _layerController.addImageLayer(imagePath: image.path),
+        );
       } else {
         _layerController.replaceAllWithImage(image.path);
 
@@ -434,6 +450,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
 
+    _recordHistory();
     _layerController.selectLayer(layer.id);
 
     _gestureStartOffset = layer.offset;
@@ -1292,7 +1309,11 @@ class _EditorScreenState extends State<EditorScreen> {
                               ? 'Hide layer'
                               : 'Show layer',
                           onPressed: () {
-                            _layerController.toggleVisibility(currentLayer.id);
+                            _applyLayerAction(
+                              () => _layerController.toggleVisibility(
+                                currentLayer.id,
+                              ),
+                            );
                           },
                           icon: Icon(
                             currentLayer.isVisible
@@ -1305,7 +1326,10 @@ class _EditorScreenState extends State<EditorScreen> {
                               ? 'Unlock layer'
                               : 'Lock layer',
                           onPressed: () {
-                            _layerController.toggleLock(currentLayer.id);
+                            _applyLayerAction(
+                              () =>
+                                  _layerController.toggleLock(currentLayer.id),
+                            );
                           },
                           icon: Icon(
                             currentLayer.isLocked
@@ -1330,6 +1354,11 @@ class _EditorScreenState extends State<EditorScreen> {
                             max: 1,
                             divisions: 100,
                             label: '${(currentLayer.opacity * 100).round()}%',
+                            onChangeStart: currentLayer.isLocked
+                                ? null
+                                : (_) {
+                                    _recordHistory();
+                                  },
                             onChanged: currentLayer.isLocked
                                 ? null
                                 : (value) {
@@ -1389,9 +1418,11 @@ class _EditorScreenState extends State<EditorScreen> {
                                 return;
                               }
 
-                              _layerController.setBlendMode(
-                                currentLayer.id,
-                                mode,
+                              _applyLayerAction(
+                                () => _layerController.setBlendMode(
+                                  currentLayer.id,
+                                  mode,
+                                ),
                               );
                             },
                     ),
@@ -1433,8 +1464,10 @@ class _EditorScreenState extends State<EditorScreen> {
                         onPressed: currentLayer.isLocked
                             ? null
                             : () {
-                                _layerController.resetLayerTransform(
-                                  currentLayer.id,
+                                _applyLayerAction(
+                                  () => _layerController.resetLayerTransform(
+                                    currentLayer.id,
+                                  ),
                                 );
                               },
                         icon: const Icon(Icons.restart_alt_rounded),
@@ -1516,7 +1549,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
 
-    _layerController.renameLayer(layer.id, newName);
+    _applyLayerAction(() => _layerController.renameLayer(layer.id, newName));
   }
 
   Future<void> _confirmDeleteLayer(EditorLayer layer) async {
@@ -1552,7 +1585,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
 
-    _layerController.deleteLayer(layer.id);
+    _applyLayerAction(() => _layerController.deleteLayer(layer.id));
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1714,8 +1747,10 @@ class _EditorScreenState extends State<EditorScreen> {
                                   ? Icons.visibility_rounded
                                   : Icons.visibility_off_rounded,
                               onPressed: () {
-                                _layerController.toggleVisibility(
-                                  selectedLayer.id,
+                                _applyLayerAction(
+                                  () => _layerController.toggleVisibility(
+                                    selectedLayer.id,
+                                  ),
                                 );
                               },
                             ),
@@ -1727,22 +1762,32 @@ class _EditorScreenState extends State<EditorScreen> {
                                   ? Icons.lock_rounded
                                   : Icons.lock_open_rounded,
                               onPressed: () {
-                                _layerController.toggleLock(selectedLayer.id);
+                                _applyLayerAction(
+                                  () => _layerController.toggleLock(
+                                    selectedLayer.id,
+                                  ),
+                                );
                               },
                             ),
                             _LayerActionButton(
                               tooltip: 'Move layer up',
                               icon: Icons.arrow_upward_rounded,
                               onPressed: () {
-                                _layerController.moveLayerUp(selectedLayer.id);
+                                _applyLayerAction(
+                                  () => _layerController.moveLayerUp(
+                                    selectedLayer.id,
+                                  ),
+                                );
                               },
                             ),
                             _LayerActionButton(
                               tooltip: 'Move layer down',
                               icon: Icons.arrow_downward_rounded,
                               onPressed: () {
-                                _layerController.moveLayerDown(
-                                  selectedLayer.id,
+                                _applyLayerAction(
+                                  () => _layerController.moveLayerDown(
+                                    selectedLayer.id,
+                                  ),
                                 );
                               },
                             ),
@@ -1766,8 +1811,10 @@ class _EditorScreenState extends State<EditorScreen> {
                               onPressed: selectedLayer.isLocked
                                   ? null
                                   : () {
-                                      _layerController.duplicateLayer(
-                                        selectedLayer.id,
+                                      _applyLayerAction(
+                                        () => _layerController.duplicateLayer(
+                                          selectedLayer.id,
+                                        ),
                                       );
                                     },
                             ),
@@ -2258,6 +2305,8 @@ class _EditorSnapshot {
     required this.flipHorizontal,
     required this.flipVertical,
     required this.cropAspectRatio,
+    required this.layers,
+    required this.selectedLayerId,
   });
 
   final double brightness;
@@ -2268,6 +2317,8 @@ class _EditorSnapshot {
   final bool flipHorizontal;
   final bool flipVertical;
   final double? cropAspectRatio;
+  final List<EditorLayer> layers;
+  final String? selectedLayerId;
 }
 
 class _CheckerboardPainter extends CustomPainter {
