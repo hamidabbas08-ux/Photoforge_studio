@@ -34,15 +34,80 @@ class ProjectFileService {
 
     final String fileName = safeName.isEmpty ? 'Untitled_Project' : safeName;
 
-    final File file = File('${directory.path}/$fileName.photoforge');
+    final File projectFile = File('${directory.path}/$fileName.photoforge');
+
+    final Directory assetsDirectory = Directory(
+      '${directory.path}/assets/$fileName',
+    );
+
+    if (!await assetsDirectory.exists()) {
+      await assetsDirectory.create(recursive: true);
+    }
+
+    final Map<String, Object?> projectJson = project.toJson();
+
+    final List<Object?> rawLayers =
+        projectJson['layers'] as List<Object?>? ?? <Object?>[];
+
+    final List<Map<String, Object?>> savedLayers = <Map<String, Object?>>[];
+
+    for (int index = 0; index < rawLayers.length; index++) {
+      final Map<String, Object?> layerJson = Map<String, Object?>.from(
+        rawLayers[index]! as Map,
+      );
+
+      final String? sourcePath = layerJson['imagePath'] as String?;
+
+      if (sourcePath != null && sourcePath.isNotEmpty) {
+        final File sourceFile = File(sourcePath);
+
+        if (await sourceFile.exists()) {
+          final String layerId = (layerJson['id'] as String? ?? 'layer_$index')
+              .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+
+          final String extension = _fileExtension(sourcePath);
+
+          final File savedImage = File(
+            '${assetsDirectory.path}/${index}_$layerId$extension',
+          );
+
+          if (sourceFile.absolute.path != savedImage.absolute.path) {
+            await sourceFile.copy(savedImage.path);
+          }
+
+          layerJson['imagePath'] = savedImage.path;
+        }
+      }
+
+      savedLayers.add(layerJson);
+    }
+
+    projectJson['layers'] = savedLayers;
 
     final String jsonText = const JsonEncoder.withIndent(
       '  ',
-    ).convert(project.toJson());
+    ).convert(projectJson);
 
-    await file.writeAsString(jsonText, flush: true);
+    await projectFile.writeAsString(jsonText, flush: true);
 
-    return file;
+    return projectFile;
+  }
+
+  String _fileExtension(String filePath) {
+    final String fileName = filePath.split('/').last;
+    final int dotIndex = fileName.lastIndexOf('.');
+
+    if (dotIndex <= 0 || dotIndex == fileName.length - 1) {
+      return '.png';
+    }
+
+    final String extension = fileName.substring(dotIndex).toLowerCase();
+
+    if (extension.length > 10) {
+      return '.png';
+    }
+
+    return extension;
   }
 
   Future<PhotoForgeProject> loadProject(File file) async {
@@ -81,8 +146,23 @@ class ProjectFileService {
   }
 
   Future<void> deleteProject(File file) async {
+    final String fileName = file.path.split('/').last;
+    final String projectFolderName = fileName.endsWith('.photoforge')
+        ? fileName.substring(0, fileName.length - '.photoforge'.length)
+        : fileName;
+
+    final Directory directory = await projectsDirectory;
+
+    final Directory assetsDirectory = Directory(
+      '${directory.path}/assets/$projectFolderName',
+    );
+
     if (await file.exists()) {
       await file.delete();
+    }
+
+    if (await assetsDirectory.exists()) {
+      await assetsDirectory.delete(recursive: true);
     }
   }
 }

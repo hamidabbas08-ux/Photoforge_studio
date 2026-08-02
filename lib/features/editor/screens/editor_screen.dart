@@ -1461,6 +1461,107 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  Future<void> _renameSelectedLayer(EditorLayer layer) async {
+    final TextEditingController controller = TextEditingController(
+      text: layer.name,
+    );
+
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Rename Layer'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 60,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(
+              labelText: 'Layer name',
+              hintText: 'Enter a layer name',
+            ),
+            onSubmitted: (String value) {
+              final String cleanName = value.trim();
+
+              if (cleanName.isNotEmpty) {
+                Navigator.of(dialogContext).pop(cleanName);
+              }
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final String cleanName = controller.text.trim();
+
+                if (cleanName.isNotEmpty) {
+                  Navigator.of(dialogContext).pop(cleanName);
+                }
+              },
+              child: const Text('Rename'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (!mounted || newName == null || newName.trim().isEmpty) {
+      return;
+    }
+
+    _layerController.renameLayer(layer.id, newName);
+  }
+
+  Future<void> _confirmDeleteLayer(EditorLayer layer) async {
+    final bool? shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Layer?'),
+          content: Text(
+            '“${layer.name}” will be removed from this project. '
+            'This action cannot be undone after saving.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(true);
+              },
+              style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || shouldDelete != true) {
+      return;
+    }
+
+    _layerController.deleteLayer(layer.id);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('${layer.name} deleted'),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   Widget _buildLayersPanel() {
     return AnimatedBuilder(
       animation: _layerController,
@@ -1646,6 +1747,13 @@ class _EditorScreenState extends State<EditorScreen> {
                               },
                             ),
                             _LayerActionButton(
+                              tooltip: 'Rename layer',
+                              icon: Icons.drive_file_rename_outline_rounded,
+                              onPressed: () {
+                                _renameSelectedLayer(selectedLayer);
+                              },
+                            ),
+                            _LayerActionButton(
                               tooltip: 'Layer properties',
                               icon: Icons.tune_rounded,
                               onPressed: () {
@@ -1669,9 +1777,7 @@ class _EditorScreenState extends State<EditorScreen> {
                               onPressed: selectedLayer.isLocked
                                   ? null
                                   : () {
-                                      _layerController.deleteLayer(
-                                        selectedLayer.id,
-                                      );
+                                      _confirmDeleteLayer(selectedLayer);
                                     },
                             ),
                           ],
