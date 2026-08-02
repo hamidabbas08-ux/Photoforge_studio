@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 
 class TextLayerService {
@@ -27,67 +26,73 @@ class TextLayerService {
       throw ArgumentError('Text cannot be empty.');
     }
 
-    final double safeWidth = canvasWidth.clamp(300, 4096).toDouble();
-    final double safeHeight = canvasHeight.clamp(300, 4096).toDouble();
+    final int safeWidth = canvasWidth.clamp(300, 4096);
+    final int safeHeight = canvasHeight.clamp(300, 4096);
 
-    final GlobalKey repaintKey = GlobalKey();
+    final ui.PictureRecorder recorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(recorder);
 
-    final RenderRepaintBoundary boundary = RenderRepaintBoundary();
-
-    final RenderView renderView = RenderView(
-      view: WidgetsBinding.instance.platformDispatcher.views.first,
-      configuration: ViewConfiguration(
-        logicalConstraints: BoxConstraints.tight(Size(safeWidth, safeHeight)),
-        devicePixelRatio: 1,
+    final TextPainter painter = TextPainter(
+      text: TextSpan(
+        text: cleanText,
+        style: TextStyle(
+          color: color,
+          fontSize: fontSize.clamp(24, 300),
+          fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
+          fontStyle: italic ? FontStyle.italic : FontStyle.normal,
+          height: 1.15,
+        ),
       ),
-      child: RenderPositionedBox(alignment: Alignment.center, child: boundary),
+      textAlign: textAlign,
+      textDirection: TextDirection.ltr,
+      maxLines: null,
     );
 
-    final PipelineOwner pipelineOwner = PipelineOwner();
-    final BuildOwner buildOwner = BuildOwner(focusManager: FocusManager());
+    final double horizontalPadding = safeWidth * 0.08;
+    final double maximumTextWidth = (safeWidth - horizontalPadding * 2).clamp(
+      100,
+      safeWidth.toDouble(),
+    );
 
-    renderView.attach(pipelineOwner);
-    renderView.prepareInitialFrame();
+    painter.layout(minWidth: 0, maxWidth: maximumTextWidth);
 
-    final RenderObjectToWidgetElement<RenderBox> rootElement =
-        RenderObjectToWidgetAdapter<RenderBox>(
-          container: boundary,
-          child: RepaintBoundary(
-            key: repaintKey,
-            child: SizedBox(
-              width: safeWidth,
-              height: safeHeight,
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(safeWidth * 0.06),
-                  child: Text(
-                    cleanText,
-                    textAlign: textAlign,
-                    style: TextStyle(
-                      color: color,
-                      fontSize: fontSize,
-                      fontWeight: bold ? FontWeight.w800 : FontWeight.w400,
-                      fontStyle: italic ? FontStyle.italic : FontStyle.normal,
-                      height: 1.15,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ).attachToRenderTree(buildOwner);
+    double x;
 
-    buildOwner.buildScope(rootElement);
-    buildOwner.finalizeTree();
+    switch (textAlign) {
+      case TextAlign.left:
+      case TextAlign.start:
+        x = horizontalPadding;
 
-    pipelineOwner.flushLayout();
-    pipelineOwner.flushCompositingBits();
-    pipelineOwner.flushPaint();
+      case TextAlign.right:
+      case TextAlign.end:
+        x = safeWidth - horizontalPadding - painter.width;
 
-    final image = await boundary.toImage(pixelRatio: 1);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      case TextAlign.center:
+      case TextAlign.justify:
+        x = (safeWidth - painter.width) / 2;
+    }
+
+    final double y = (safeHeight - painter.height) / 2;
+
+    painter.paint(
+      canvas,
+      Offset(
+        x.clamp(0, safeWidth.toDouble()),
+        y.clamp(0, safeHeight.toDouble()),
+      ),
+    );
+
+    final ui.Picture picture = recorder.endRecording();
+
+    final ui.Image image = await picture.toImage(safeWidth, safeHeight);
+
+    final ByteData? byteData = await image.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
 
     image.dispose();
+    picture.dispose();
+    painter.dispose();
 
     if (byteData == null) {
       throw StateError('Text layer could not be rendered.');
