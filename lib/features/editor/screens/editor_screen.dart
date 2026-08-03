@@ -15,6 +15,7 @@ import '../layers/controllers/layer_controller.dart';
 import '../layers/models/editor_layer.dart';
 import '../layers/models/layer_blend_mapper.dart';
 import '../layers/screens/drawing_layer_editor.dart';
+import '../layers/screens/selected_layer_eraser_screen.dart';
 import '../layers/services/layer_detail_service.dart';
 import '../layers/services/shape_layer_service.dart';
 import '../layers/services/text_layer_service.dart';
@@ -48,6 +49,7 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isCreatingShapeLayer = false;
   bool _isCreatingDrawingLayer = false;
   bool _isProcessingLayerDetail = false;
+  bool _isOpeningLayerEraser = false;
   double _detailBlurRadius = 0;
   double _detailSharpenAmount = 0;
   Size _lastCanvasSize = Size.zero;
@@ -80,6 +82,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _EditorTool('Draw', Icons.brush_rounded),
     _EditorTool('Text', Icons.text_fields_rounded),
     _EditorTool('Shapes', Icons.category_outlined),
+    _EditorTool('Eraser', Icons.auto_fix_normal_rounded),
     _EditorTool('Detail', Icons.blur_on_rounded),
     _EditorTool('Layers', Icons.layers_outlined),
   ];
@@ -1088,6 +1091,59 @@ class _EditorScreenState extends State<EditorScreen> {
     };
   }
 
+  Future<void> _openSelectedLayerEraser() async {
+    final EditorLayer? selectedLayer = _layerController.selectedLayer;
+
+    final String? imagePath = selectedLayer?.imagePath;
+
+    if (selectedLayer == null ||
+        imagePath == null ||
+        imagePath.isEmpty ||
+        selectedLayer.isLocked ||
+        _isOpeningLayerEraser) {
+      return;
+    }
+
+    setState(() => _isOpeningLayerEraser = true);
+
+    try {
+      final File? outputFile = await Navigator.of(context).push<File>(
+        MaterialPageRoute<File>(
+          fullscreenDialog: true,
+          builder: (BuildContext context) {
+            return SelectedLayerEraserScreen(sourcePath: imagePath);
+          },
+        ),
+      );
+
+      if (!mounted || outputFile == null) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.updateLayerImagePath(
+          layerId: selectedLayer.id,
+          imagePath: outputFile.path,
+        ),
+      );
+
+      setState(() {
+        _selectedTool = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Layer erasing applied'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isOpeningLayerEraser = false);
+      }
+    }
+  }
+
   Future<void> _applyLayerDetailEffect() async {
     final EditorLayer? selectedLayer = _layerController.selectedLayer;
     final String? imagePath = selectedLayer?.imagePath;
@@ -1818,7 +1874,7 @@ class _EditorScreenState extends State<EditorScreen> {
         fit: StackFit.expand,
         children: [
           layerImage,
-          if (selected && (_selectedTool == 0 || _selectedTool == 9))
+          if (selected && (_selectedTool == 0 || _selectedTool == 10))
             IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
@@ -1951,10 +2007,14 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     if (_selectedTool == 8) {
-      return _buildLayerDetailPanel();
+      return _buildLayerEraserPanel();
     }
 
     if (_selectedTool == 9) {
+      return _buildLayerDetailPanel();
+    }
+
+    if (_selectedTool == 10) {
       return _buildLayersPanel();
     }
 
@@ -2595,6 +2655,79 @@ class _EditorScreenState extends State<EditorScreen> {
         content: Text('${layer.name} deleted'),
         duration: const Duration(seconds: 2),
       ),
+    );
+  }
+
+  Widget _buildLayerEraserPanel() {
+    final EditorLayer? selectedLayer = _layerController.selectedLayer;
+
+    final bool usable =
+        selectedLayer != null &&
+        selectedLayer.imagePath != null &&
+        selectedLayer.imagePath!.isNotEmpty &&
+        !selectedLayer.isLocked;
+
+    return Container(
+      height: 92,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: usable
+          ? Row(
+              children: [
+                const Icon(
+                  Icons.auto_fix_normal_rounded,
+                  color: AppTheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Selected: ${selectedLayer.name}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Erase or restore parts of this layer.',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: _isOpeningLayerEraser
+                      ? null
+                      : _openSelectedLayerEraser,
+                  icon: _isOpeningLayerEraser
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_fix_normal_rounded),
+                  label: const Text('Open Eraser'),
+                ),
+              ],
+            )
+          : const Center(
+              child: Text(
+                'Select an unlocked layer before opening the eraser.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ),
     );
   }
 
