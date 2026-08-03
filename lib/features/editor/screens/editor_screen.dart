@@ -14,6 +14,7 @@ import '../project/services/project_file_service.dart';
 import '../layers/controllers/layer_controller.dart';
 import '../layers/models/editor_layer.dart';
 import '../layers/models/layer_blend_mapper.dart';
+import '../layers/screens/drawing_layer_editor.dart';
 import '../layers/services/shape_layer_service.dart';
 import '../layers/services/text_layer_service.dart';
 import '../layers/widgets/layer_blend_mask.dart';
@@ -44,6 +45,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   bool _isCreatingTextLayer = false;
   bool _isCreatingShapeLayer = false;
+  bool _isCreatingDrawingLayer = false;
   Size _lastCanvasSize = Size.zero;
 
   double _brightness = 0;
@@ -71,7 +73,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _EditorTool('Adjust', Icons.tune_rounded),
     _EditorTool('Transform', Icons.transform_rounded),
     _EditorTool('Filters', Icons.filter_vintage_outlined),
-    _EditorTool('Retouch', Icons.auto_fix_high_rounded),
+    _EditorTool('Draw', Icons.brush_rounded),
     _EditorTool('Text', Icons.text_fields_rounded),
     _EditorTool('Shapes', Icons.category_outlined),
     _EditorTool('Layers', Icons.layers_outlined),
@@ -324,6 +326,53 @@ class _EditorScreenState extends State<EditorScreen> {
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
+      }
+    }
+  }
+
+  Future<void> _openDrawingEditor() async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingDrawingLayer) {
+      return;
+    }
+
+    setState(() => _isCreatingDrawingLayer = true);
+
+    try {
+      final File? drawingFile = await Navigator.of(context).push<File>(
+        MaterialPageRoute<File>(
+          fullscreenDialog: true,
+          builder: (BuildContext context) {
+            return DrawingLayerEditor(
+              canvasWidth: image.width,
+              canvasHeight: image.height,
+            );
+          },
+        ),
+      );
+
+      if (!mounted || drawingFile == null) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.addDrawingLayer(imagePath: drawingFile.path),
+      );
+
+      setState(() {
+        _selectedTool = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Drawing layer added'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingDrawingLayer = false);
       }
     }
   }
@@ -1719,6 +1768,40 @@ class _EditorScreenState extends State<EditorScreen> {
       return _buildFiltersPanel();
     }
 
+    if (_selectedTool == 5) {
+      return Container(
+        height: 74,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: const BoxDecoration(
+          color: AppTheme.surface,
+          border: Border(top: BorderSide(color: Colors.white10)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.brush_rounded, color: AppTheme.primary),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Draw with brush, colors, opacity and eraser',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ),
+            FilledButton.icon(
+              onPressed: _isCreatingDrawingLayer ? null : _openDrawingEditor,
+              icon: _isCreatingDrawingLayer
+                  ? const SizedBox(
+                      width: 17,
+                      height: 17,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.brush_rounded),
+              label: const Text('Start Drawing'),
+            ),
+          ],
+        ),
+      );
+    }
+
     if (_selectedTool == 6) {
       return Container(
         height: 74,
@@ -2709,6 +2792,16 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     child: layer.imagePath == null
                         ? const CustomPaint(painter: _CheckerboardPainter())
+                        : layer.type == EditorLayerType.drawing
+                        ? Container(
+                            color: Colors.black45,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.brush_rounded,
+                              color: Colors.white,
+                              size: 30,
+                            ),
+                          )
                         : layer.type == EditorLayerType.shape
                         ? Container(
                             color: Colors.black45,

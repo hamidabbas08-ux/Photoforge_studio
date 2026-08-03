@@ -174,6 +174,25 @@ class LayerController extends ChangeNotifier {
     );
   }
 
+  EditorLayer addDrawingLayer({required String imagePath}) {
+    final int drawingCount = _layers
+        .where((EditorLayer layer) => layer.type == EditorLayerType.drawing)
+        .length;
+
+    final EditorLayer layer = EditorLayer(
+      id: _createLayerId(),
+      name: 'Drawing Layer ${drawingCount + 1}',
+      type: EditorLayerType.drawing,
+      imagePath: imagePath,
+    );
+
+    _layers.add(layer);
+    _selectedLayerId = layer.id;
+    notifyListeners();
+
+    return layer;
+  }
+
   void selectLayer(String layerId) {
     if (!_containsLayer(layerId)) {
       return;

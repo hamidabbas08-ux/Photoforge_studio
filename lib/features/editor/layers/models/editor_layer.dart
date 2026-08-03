@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-enum EditorLayerType { image, text, shape, adjustment, group }
+enum EditorLayerType { image, text, shape, drawing, adjustment, group }
 
 enum EditorBlendMode {
   normal,
