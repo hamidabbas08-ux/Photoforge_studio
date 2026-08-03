@@ -34,6 +34,11 @@ class EditorLayer {
     this.textBold,
     this.textItalic,
     this.textAlignment,
+    this.shapeKind,
+    this.shapeFillColorValue,
+    this.shapeStrokeColorValue,
+    this.shapeStrokeWidth,
+    this.shapeCornerRadius,
   });
 
   final String id;
@@ -58,6 +63,12 @@ class EditorLayer {
   final bool? textItalic;
   final String? textAlignment;
 
+  final String? shapeKind;
+  final int? shapeFillColorValue;
+  final int? shapeStrokeColorValue;
+  final double? shapeStrokeWidth;
+  final double? shapeCornerRadius;
+
   EditorLayer copyWith({
     String? id,
     String? name,
@@ -77,6 +88,11 @@ class EditorLayer {
     bool? textBold,
     bool? textItalic,
     String? textAlignment,
+    String? shapeKind,
+    int? shapeFillColorValue,
+    int? shapeStrokeColorValue,
+    double? shapeStrokeWidth,
+    double? shapeCornerRadius,
   }) {
     return EditorLayer(
       id: id ?? this.id,
@@ -97,6 +113,12 @@ class EditorLayer {
       textBold: textBold ?? this.textBold,
       textItalic: textItalic ?? this.textItalic,
       textAlignment: textAlignment ?? this.textAlignment,
+      shapeKind: shapeKind ?? this.shapeKind,
+      shapeFillColorValue: shapeFillColorValue ?? this.shapeFillColorValue,
+      shapeStrokeColorValue:
+          shapeStrokeColorValue ?? this.shapeStrokeColorValue,
+      shapeStrokeWidth: shapeStrokeWidth ?? this.shapeStrokeWidth,
+      shapeCornerRadius: shapeCornerRadius ?? this.shapeCornerRadius,
     );
   }
 }

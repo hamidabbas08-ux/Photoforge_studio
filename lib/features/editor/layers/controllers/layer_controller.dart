@@ -125,12 +125,22 @@ class LayerController extends ChangeNotifier {
   EditorLayer addShapeLayer({
     required String imagePath,
     required String shapeName,
+    required String shapeKind,
+    required int fillColorValue,
+    required int strokeColorValue,
+    required double strokeWidth,
+    required double cornerRadius,
   }) {
     final EditorLayer layer = EditorLayer(
       id: _createLayerId(),
       name: shapeName,
       type: EditorLayerType.shape,
       imagePath: imagePath,
+      shapeKind: shapeKind,
+      shapeFillColorValue: fillColorValue,
+      shapeStrokeColorValue: strokeColorValue,
+      shapeStrokeWidth: strokeWidth,
+      shapeCornerRadius: cornerRadius,
     );
 
     _layers.add(layer);
@@ -138,6 +148,30 @@ class LayerController extends ChangeNotifier {
     notifyListeners();
 
     return layer;
+  }
+
+  void updateShapeLayer({
+    required String layerId,
+    required String imagePath,
+    required String shapeName,
+    required String shapeKind,
+    required int fillColorValue,
+    required int strokeColorValue,
+    required double strokeWidth,
+    required double cornerRadius,
+  }) {
+    _updateLayer(
+      layerId,
+      (EditorLayer layer) => layer.copyWith(
+        name: shapeName,
+        imagePath: imagePath,
+        shapeKind: shapeKind,
+        shapeFillColorValue: fillColorValue,
+        shapeStrokeColorValue: strokeColorValue,
+        shapeStrokeWidth: strokeWidth,
+        shapeCornerRadius: cornerRadius,
+      ),
+    );
   }
 
   void selectLayer(String layerId) {

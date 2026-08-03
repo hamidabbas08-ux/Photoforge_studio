@@ -114,6 +114,11 @@ class PhotoForgeProjectLayer {
     this.textBold,
     this.textItalic,
     this.textAlignment,
+    this.shapeKind,
+    this.shapeFillColorValue,
+    this.shapeStrokeColorValue,
+    this.shapeStrokeWidth,
+    this.shapeCornerRadius,
   });
 
   final String id;
@@ -139,6 +144,12 @@ class PhotoForgeProjectLayer {
   final bool? textItalic;
   final String? textAlignment;
 
+  final String? shapeKind;
+  final int? shapeFillColorValue;
+  final int? shapeStrokeColorValue;
+  final double? shapeStrokeWidth;
+  final double? shapeCornerRadius;
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,
@@ -160,6 +171,11 @@ class PhotoForgeProjectLayer {
       'textBold': textBold,
       'textItalic': textItalic,
       'textAlignment': textAlignment,
+      'shapeKind': shapeKind,
+      'shapeFillColorValue': shapeFillColorValue,
+      'shapeStrokeColorValue': shapeStrokeColorValue,
+      'shapeStrokeWidth': shapeStrokeWidth,
+      'shapeCornerRadius': shapeCornerRadius,
     };
   }
 
@@ -186,6 +202,11 @@ class PhotoForgeProjectLayer {
       textBold: json['textBold'] as bool?,
       textItalic: json['textItalic'] as bool?,
       textAlignment: json['textAlignment'] as String?,
+      shapeKind: json['shapeKind'] as String?,
+      shapeFillColorValue: (json['shapeFillColorValue'] as num?)?.toInt(),
+      shapeStrokeColorValue: (json['shapeStrokeColorValue'] as num?)?.toInt(),
+      shapeStrokeWidth: (json['shapeStrokeWidth'] as num?)?.toDouble(),
+      shapeCornerRadius: (json['shapeCornerRadius'] as num?)?.toDouble(),
     );
   }
 }

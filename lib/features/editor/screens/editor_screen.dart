@@ -118,6 +118,11 @@ class _EditorScreenState extends State<EditorScreen> {
             textBold: layer.textBold,
             textItalic: layer.textItalic,
             textAlignment: layer.textAlignment,
+            shapeKind: layer.shapeKind,
+            shapeFillColorValue: layer.shapeFillColorValue,
+            shapeStrokeColorValue: layer.shapeStrokeColorValue,
+            shapeStrokeWidth: layer.shapeStrokeWidth,
+            shapeCornerRadius: layer.shapeCornerRadius,
           ),
         )
         .toList();
@@ -661,23 +666,44 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _showAddShapeDialog() async {
+    await _showShapeLayerDialog();
+  }
+
+  Future<void> _showEditShapeDialog(EditorLayer layer) async {
+    if (layer.type != EditorLayerType.shape) {
+      return;
+    }
+
+    await _showShapeLayerDialog(layer: layer);
+  }
+
+  Future<void> _showShapeLayerDialog({EditorLayer? layer}) async {
     if (_editorImage == null || _isCreatingShapeLayer) {
       return;
     }
 
-    ShapeLayerKind selectedKind = ShapeLayerKind.rectangle;
-    Color fillColor = Colors.blue;
-    Color strokeColor = Colors.white;
-    double strokeWidth = 8;
-    double cornerRadius = 28;
+    final bool isEditing = layer != null;
 
-    final bool? shouldCreate = await showDialog<bool>(
+    ShapeLayerKind selectedKind = _parseShapeKind(layer?.shapeKind);
+
+    Color fillColor = Color(
+      layer?.shapeFillColorValue ?? Colors.blue.toARGB32(),
+    );
+
+    Color strokeColor = Color(
+      layer?.shapeStrokeColorValue ?? Colors.white.toARGB32(),
+    );
+
+    double strokeWidth = layer?.shapeStrokeWidth ?? 8;
+    double cornerRadius = layer?.shapeCornerRadius ?? 28;
+
+    final bool? shouldSave = await showDialog<bool>(
       context: context,
       builder: (BuildContext dialogContext) {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setDialogState) {
             return AlertDialog(
-              title: const Text('Add Shape Layer'),
+              title: Text(isEditing ? 'Edit Shape Layer' : 'Add Shape Layer'),
               content: SingleChildScrollView(
                 child: SizedBox(
                   width: 420,
@@ -731,23 +757,28 @@ class _EditorScreenState extends State<EditorScreen> {
                         ],
                       ),
                       const SizedBox(height: 20),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          'Fill color',
-                          style: TextStyle(fontWeight: FontWeight.w800),
+
+                      if (selectedKind == ShapeLayerKind.rectangle ||
+                          selectedKind == ShapeLayerKind.circle) ...[
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Fill color',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      _buildShapeColorPicker(
-                        selectedColor: fillColor,
-                        onSelected: (Color color) {
-                          setDialogState(() {
-                            fillColor = color;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 18),
+                        const SizedBox(height: 8),
+                        _buildShapeColorPicker(
+                          selectedColor: fillColor,
+                          onSelected: (Color color) {
+                            setDialogState(() {
+                              fillColor = color;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 18),
+                      ],
+
                       const Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
@@ -819,8 +850,10 @@ class _EditorScreenState extends State<EditorScreen> {
                   onPressed: () {
                     Navigator.of(dialogContext).pop(true);
                   },
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('Add Shape'),
+                  icon: Icon(
+                    isEditing ? Icons.save_rounded : Icons.add_rounded,
+                  ),
+                  label: Text(isEditing ? 'Save Changes' : 'Add Shape'),
                 ),
               ],
             );
@@ -829,11 +862,12 @@ class _EditorScreenState extends State<EditorScreen> {
       },
     );
 
-    if (shouldCreate != true || !mounted) {
+    if (shouldSave != true || !mounted) {
       return;
     }
 
-    await _createShapeLayer(
+    await _renderAndSaveShapeLayer(
+      existingLayer: layer,
       kind: selectedKind,
       fillColor: fillColor,
       strokeColor: strokeColor,
@@ -895,7 +929,8 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  Future<void> _createShapeLayer({
+  Future<void> _renderAndSaveShapeLayer({
+    required EditorLayer? existingLayer,
     required ShapeLayerKind kind,
     required Color fillColor,
     required Color strokeColor,
@@ -925,19 +960,34 @@ class _EditorScreenState extends State<EditorScreen> {
         return;
       }
 
-      final String shapeName = switch (kind) {
-        ShapeLayerKind.rectangle => 'Rectangle',
-        ShapeLayerKind.circle => 'Circle',
-        ShapeLayerKind.line => 'Line',
-        ShapeLayerKind.arrow => 'Arrow',
-      };
+      final String shapeName = _shapeDisplayName(kind);
 
-      _applyLayerAction(
-        () => _layerController.addShapeLayer(
-          imagePath: shapeImage.path,
-          shapeName: shapeName,
-        ),
-      );
+      if (existingLayer == null) {
+        _applyLayerAction(
+          () => _layerController.addShapeLayer(
+            imagePath: shapeImage.path,
+            shapeName: shapeName,
+            shapeKind: kind.name,
+            fillColorValue: fillColor.toARGB32(),
+            strokeColorValue: strokeColor.toARGB32(),
+            strokeWidth: strokeWidth,
+            cornerRadius: cornerRadius,
+          ),
+        );
+      } else {
+        _applyLayerAction(
+          () => _layerController.updateShapeLayer(
+            layerId: existingLayer.id,
+            imagePath: shapeImage.path,
+            shapeName: shapeName,
+            shapeKind: kind.name,
+            fillColorValue: fillColor.toARGB32(),
+            strokeColorValue: strokeColor.toARGB32(),
+            strokeWidth: strokeWidth,
+            cornerRadius: cornerRadius,
+          ),
+        );
+      }
 
       setState(() {
         _selectedTool = 0;
@@ -945,7 +995,11 @@ class _EditorScreenState extends State<EditorScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$shapeName layer added'),
+          content: Text(
+            existingLayer == null
+                ? '$shapeName layer added'
+                : '$shapeName layer updated',
+          ),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -955,13 +1009,29 @@ class _EditorScreenState extends State<EditorScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Shape could not be added: $error')),
+        SnackBar(content: Text('Shape could not be saved: $error')),
       );
     } finally {
       if (mounted) {
         setState(() => _isCreatingShapeLayer = false);
       }
     }
+  }
+
+  ShapeLayerKind _parseShapeKind(String? value) {
+    return ShapeLayerKind.values.firstWhere(
+      (ShapeLayerKind kind) => kind.name == value,
+      orElse: () => ShapeLayerKind.rectangle,
+    );
+  }
+
+  String _shapeDisplayName(ShapeLayerKind kind) {
+    return switch (kind) {
+      ShapeLayerKind.rectangle => 'Rectangle',
+      ShapeLayerKind.circle => 'Circle',
+      ShapeLayerKind.line => 'Line',
+      ShapeLayerKind.arrow => 'Arrow',
+    };
   }
 
   Future<void> _showExportSheet() async {
@@ -1168,6 +1238,11 @@ class _EditorScreenState extends State<EditorScreen> {
             textBold: layer.textBold,
             textItalic: layer.textItalic,
             textAlignment: layer.textAlignment,
+            shapeKind: layer.shapeKind,
+            shapeFillColorValue: layer.shapeFillColorValue,
+            shapeStrokeColorValue: layer.shapeStrokeColorValue,
+            shapeStrokeWidth: layer.shapeStrokeWidth,
+            shapeCornerRadius: layer.shapeCornerRadius,
           ),
       ],
       brightness: _brightness,
@@ -2080,6 +2155,23 @@ class _EditorScreenState extends State<EditorScreen> {
                                 },
                           icon: const Icon(Icons.edit_rounded),
                           label: const Text('Edit Text'),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    if (currentLayer.type == EditorLayerType.shape) ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: currentLayer.isLocked
+                              ? null
+                              : () async {
+                                  Navigator.of(sheetContext).pop();
+                                  await _showEditShapeDialog(currentLayer);
+                                },
+                          icon: const Icon(Icons.edit_rounded),
+                          label: const Text('Edit Shape'),
                         ),
                       ),
                       const SizedBox(height: 20),
