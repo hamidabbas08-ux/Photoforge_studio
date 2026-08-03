@@ -15,6 +15,7 @@ import '../layers/controllers/layer_controller.dart';
 import '../layers/models/editor_layer.dart';
 import '../layers/models/layer_blend_mapper.dart';
 import '../layers/screens/drawing_layer_editor.dart';
+import '../layers/services/layer_detail_service.dart';
 import '../layers/services/shape_layer_service.dart';
 import '../layers/services/text_layer_service.dart';
 import '../layers/widgets/layer_blend_mask.dart';
@@ -46,6 +47,9 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isCreatingTextLayer = false;
   bool _isCreatingShapeLayer = false;
   bool _isCreatingDrawingLayer = false;
+  bool _isProcessingLayerDetail = false;
+  double _detailBlurRadius = 0;
+  double _detailSharpenAmount = 0;
   Size _lastCanvasSize = Size.zero;
 
   double _brightness = 0;
@@ -76,6 +80,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _EditorTool('Draw', Icons.brush_rounded),
     _EditorTool('Text', Icons.text_fields_rounded),
     _EditorTool('Shapes', Icons.category_outlined),
+    _EditorTool('Detail', Icons.blur_on_rounded),
     _EditorTool('Layers', Icons.layers_outlined),
   ];
 
@@ -1083,6 +1088,81 @@ class _EditorScreenState extends State<EditorScreen> {
     };
   }
 
+  Future<void> _applyLayerDetailEffect() async {
+    final EditorLayer? selectedLayer = _layerController.selectedLayer;
+    final String? imagePath = selectedLayer?.imagePath;
+
+    if (selectedLayer == null ||
+        imagePath == null ||
+        imagePath.isEmpty ||
+        selectedLayer.isLocked ||
+        _isProcessingLayerDetail) {
+      return;
+    }
+
+    if (_detailBlurRadius <= 0 && _detailSharpenAmount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Increase Blur or Sharpen before applying.'),
+        ),
+      );
+
+      return;
+    }
+
+    setState(() => _isProcessingLayerDetail = true);
+
+    try {
+      final File processedFile = await LayerDetailService.instance.apply(
+        sourcePath: imagePath,
+        blurRadius: _detailBlurRadius.round(),
+        sharpenAmount: _detailSharpenAmount,
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.updateLayerImagePath(
+          layerId: selectedLayer.id,
+          imagePath: processedFile.path,
+        ),
+      );
+
+      setState(() {
+        _detailBlurRadius = 0;
+        _detailSharpenAmount = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Layer detail effect applied'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Layer could not be processed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingLayerDetail = false);
+      }
+    }
+  }
+
+  void _resetLayerDetailControls() {
+    setState(() {
+      _detailBlurRadius = 0;
+      _detailSharpenAmount = 0;
+    });
+  }
+
   Future<void> _showExportSheet() async {
     if (_editorImage == null || _isExporting) {
       return;
@@ -1738,7 +1818,7 @@ class _EditorScreenState extends State<EditorScreen> {
         fit: StackFit.expand,
         children: [
           layerImage,
-          if (selected && (_selectedTool == 0 || _selectedTool == 8))
+          if (selected && (_selectedTool == 0 || _selectedTool == 9))
             IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
@@ -1871,6 +1951,10 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     if (_selectedTool == 8) {
+      return _buildLayerDetailPanel();
+    }
+
+    if (_selectedTool == 9) {
       return _buildLayersPanel();
     }
 
@@ -2511,6 +2595,149 @@ class _EditorScreenState extends State<EditorScreen> {
         content: Text('${layer.name} deleted'),
         duration: const Duration(seconds: 2),
       ),
+    );
+  }
+
+  Widget _buildLayerDetailPanel() {
+    final EditorLayer? selectedLayer = _layerController.selectedLayer;
+
+    final bool hasUsableLayer =
+        selectedLayer != null &&
+        selectedLayer.imagePath != null &&
+        selectedLayer.imagePath!.isNotEmpty &&
+        !selectedLayer.isLocked;
+
+    return Container(
+      height: 184,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: hasUsableLayer
+          ? Column(
+              children: [
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.blur_on_rounded,
+                      color: AppTheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Selected: ${selectedLayer.name}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: _isProcessingLayerDetail
+                          ? null
+                          : _resetLayerDetailControls,
+                      icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                      label: const Text('Reset'),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 68,
+                      child: Text('Blur', style: TextStyle(fontSize: 11)),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: _detailBlurRadius,
+                        min: 0,
+                        max: 25,
+                        divisions: 25,
+                        label: _detailBlurRadius.round().toString(),
+                        onChanged: _isProcessingLayerDetail
+                            ? null
+                            : (double value) {
+                                setState(() {
+                                  _detailBlurRadius = value;
+                                });
+                              },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 30,
+                      child: Text(
+                        _detailBlurRadius.round().toString(),
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 68,
+                      child: Text('Sharpen', style: TextStyle(fontSize: 11)),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: _detailSharpenAmount,
+                        min: 0,
+                        max: 1,
+                        divisions: 10,
+                        label: '${(_detailSharpenAmount * 100).round()}%',
+                        onChanged: _isProcessingLayerDetail
+                            ? null
+                            : (double value) {
+                                setState(() {
+                                  _detailSharpenAmount = value;
+                                });
+                              },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 36,
+                      child: Text(
+                        '${(_detailSharpenAmount * 100).round()}%',
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: _isProcessingLayerDetail
+                        ? null
+                        : _applyLayerDetailEffect,
+                    icon: _isProcessingLayerDetail
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.auto_fix_high_rounded),
+                    label: Text(
+                      _isProcessingLayerDetail
+                          ? 'Processing...'
+                          : 'Apply to Selected Layer',
+                    ),
+                  ),
+                ),
+              ],
+            )
+          : const Center(
+              child: Text(
+                'Select an unlocked image, text, shape or drawing layer.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
+              ),
+            ),
     );
   }
 

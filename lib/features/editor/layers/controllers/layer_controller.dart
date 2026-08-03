@@ -193,6 +193,22 @@ class LayerController extends ChangeNotifier {
     return layer;
   }
 
+  void updateLayerImagePath({
+    required String layerId,
+    required String imagePath,
+  }) {
+    final EditorLayer? layer = _layerById(layerId);
+
+    if (layer == null || layer.isLocked || imagePath.isEmpty) {
+      return;
+    }
+
+    _updateLayer(
+      layerId,
+      (EditorLayer currentLayer) => currentLayer.copyWith(imagePath: imagePath),
+    );
+  }
+
   void selectLayer(String layerId) {
     if (!_containsLayer(layerId)) {
       return;
