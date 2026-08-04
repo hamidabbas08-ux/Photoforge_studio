@@ -143,6 +143,7 @@ class PhotoForgeProjectLayer {
     this.shapeStrokeColorValue,
     this.shapeStrokeWidth,
     this.shapeCornerRadius,
+    this.cutoutOriginalPath,
   });
 
   final String id;
@@ -173,6 +174,7 @@ class PhotoForgeProjectLayer {
   final int? shapeStrokeColorValue;
   final double? shapeStrokeWidth;
   final double? shapeCornerRadius;
+  final String? cutoutOriginalPath;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -200,6 +202,7 @@ class PhotoForgeProjectLayer {
       'shapeStrokeColorValue': shapeStrokeColorValue,
       'shapeStrokeWidth': shapeStrokeWidth,
       'shapeCornerRadius': shapeCornerRadius,
+      'cutoutOriginalPath': cutoutOriginalPath,
     };
   }
 
@@ -231,6 +234,7 @@ class PhotoForgeProjectLayer {
       shapeStrokeColorValue: (json['shapeStrokeColorValue'] as num?)?.toInt(),
       shapeStrokeWidth: (json['shapeStrokeWidth'] as num?)?.toDouble(),
       shapeCornerRadius: (json['shapeCornerRadius'] as num?)?.toDouble(),
+      cutoutOriginalPath: json['cutoutOriginalPath'] as String?,
     );
   }
 }

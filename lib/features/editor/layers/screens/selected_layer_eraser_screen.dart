@@ -6,9 +6,14 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 
 class SelectedLayerEraserScreen extends StatefulWidget {
-  const SelectedLayerEraserScreen({super.key, required this.sourcePath});
+  const SelectedLayerEraserScreen({
+    super.key,
+    required this.sourcePath,
+    required this.originalSourcePath,
+  });
 
   final String sourcePath;
+  final String originalSourcePath;
 
   @override
   State<SelectedLayerEraserScreen> createState() =>
@@ -134,19 +139,38 @@ class _SelectedLayerEraserScreenState extends State<SelectedLayerEraserScreen> {
 
   Future<File> _renderOutput() async {
     final File sourceFile = File(widget.sourcePath);
+    final File originalSourceFile = File(widget.originalSourcePath);
 
     if (!await sourceFile.exists()) {
       throw StateError('Selected layer image is unavailable.');
     }
 
-    final Uint8List bytes = await sourceFile.readAsBytes();
-    final img.Image? original = img.decodeImage(bytes);
-
-    if (original == null) {
-      throw StateError('Selected layer could not be decoded.');
+    if (!await originalSourceFile.exists()) {
+      throw StateError('Original foreground image is unavailable.');
     }
 
-    final img.Image output = img.Image.from(original);
+    final Uint8List sourceBytes = await sourceFile.readAsBytes();
+
+    final Uint8List originalBytes = await originalSourceFile.readAsBytes();
+
+    final img.Image? current = img.decodeImage(sourceBytes);
+
+    img.Image? original = img.decodeImage(originalBytes);
+
+    if (current == null || original == null) {
+      throw StateError('Selected layer images could not be decoded.');
+    }
+
+    if (original.width != current.width || original.height != current.height) {
+      original = img.copyResize(
+        original,
+        width: current.width,
+        height: current.height,
+        interpolation: img.Interpolation.linear,
+      );
+    }
+
+    final img.Image output = img.Image.from(current);
 
     for (final _MaskStroke stroke in _strokes) {
       _applyStroke(output: output, original: original, stroke: stroke);
@@ -299,7 +323,7 @@ class _SelectedLayerEraserScreenState extends State<SelectedLayerEraserScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Layer Eraser'),
+        title: const Text('Cutout Refine Studio'),
         actions: [
           IconButton(
             tooltip: 'Undo stroke',
@@ -397,7 +421,7 @@ class _SelectedLayerEraserScreenState extends State<SelectedLayerEraserScreen> {
                           Icons.auto_fix_normal_rounded,
                           size: 18,
                         ),
-                        label: const Text('Erase'),
+                        label: const Text('Erase Background'),
                         onSelected: (_) {
                           setState(() => _restoreMode = false);
                         },
@@ -406,7 +430,7 @@ class _SelectedLayerEraserScreenState extends State<SelectedLayerEraserScreen> {
                       FilterChip(
                         selected: _restoreMode,
                         avatar: const Icon(Icons.restore_rounded, size: 18),
-                        label: const Text('Restore'),
+                        label: const Text('Restore Foreground'),
                         onSelected: (_) {
                           setState(() => _restoreMode = true);
                         },
@@ -446,7 +470,7 @@ class _SelectedLayerEraserScreenState extends State<SelectedLayerEraserScreen> {
                   ),
                   Text(
                     _restoreMode
-                        ? 'Restore mode: marked areas will return from the original layer.'
+                        ? 'Restore mode: marked areas return from the original photo.'
                         : 'Erase mode: marked areas will become transparent.',
                     style: const TextStyle(color: Colors.white60, fontSize: 11),
                     textAlign: TextAlign.center,

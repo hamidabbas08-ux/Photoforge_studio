@@ -143,6 +143,7 @@ class _EditorScreenState extends State<EditorScreen> {
             shapeStrokeColorValue: layer.shapeStrokeColorValue,
             shapeStrokeWidth: layer.shapeStrokeWidth,
             shapeCornerRadius: layer.shapeCornerRadius,
+            cutoutOriginalPath: layer.cutoutOriginalPath,
           ),
         )
         .toList();
@@ -1138,6 +1139,7 @@ class _EditorScreenState extends State<EditorScreen> {
         () => _layerController.updateLayerImagePath(
           layerId: selectedLayer.id,
           imagePath: outputFile.path,
+          cutoutOriginalPath: selectedLayer.cutoutOriginalPath ?? imagePath,
         ),
       );
 
@@ -1184,7 +1186,10 @@ class _EditorScreenState extends State<EditorScreen> {
         MaterialPageRoute<File>(
           fullscreenDialog: true,
           builder: (BuildContext context) {
-            return SelectedLayerEraserScreen(sourcePath: imagePath);
+            return SelectedLayerEraserScreen(
+              sourcePath: imagePath,
+              originalSourcePath: selectedLayer.cutoutOriginalPath ?? imagePath,
+            );
           },
         ),
       );
@@ -1206,7 +1211,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Layer erasing applied'),
+          content: Text('Cutout refinement applied'),
           duration: Duration(seconds: 2),
         ),
       );
@@ -1501,6 +1506,7 @@ class _EditorScreenState extends State<EditorScreen> {
             shapeStrokeColorValue: layer.shapeStrokeColorValue,
             shapeStrokeWidth: layer.shapeStrokeWidth,
             shapeCornerRadius: layer.shapeCornerRadius,
+            cutoutOriginalPath: layer.cutoutOriginalPath,
           ),
       ],
       brightness: _brightness,
@@ -2992,7 +2998,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                 ),
                               )
                             : const Icon(Icons.auto_fix_normal_rounded),
-                        label: const Text('Manual Eraser'),
+                        label: const Text('Refine Edges'),
                       ),
                     ),
                   ],

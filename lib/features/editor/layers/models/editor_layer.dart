@@ -39,6 +39,7 @@ class EditorLayer {
     this.shapeStrokeColorValue,
     this.shapeStrokeWidth,
     this.shapeCornerRadius,
+    this.cutoutOriginalPath,
   });
 
   final String id;
@@ -69,6 +70,9 @@ class EditorLayer {
   final double? shapeStrokeWidth;
   final double? shapeCornerRadius;
 
+  /// Original image retained for Cutout Refine restore mode.
+  final String? cutoutOriginalPath;
+
   EditorLayer copyWith({
     String? id,
     String? name,
@@ -93,6 +97,7 @@ class EditorLayer {
     int? shapeStrokeColorValue,
     double? shapeStrokeWidth,
     double? shapeCornerRadius,
+    String? cutoutOriginalPath,
   }) {
     return EditorLayer(
       id: id ?? this.id,
@@ -119,6 +124,7 @@ class EditorLayer {
           shapeStrokeColorValue ?? this.shapeStrokeColorValue,
       shapeStrokeWidth: shapeStrokeWidth ?? this.shapeStrokeWidth,
       shapeCornerRadius: shapeCornerRadius ?? this.shapeCornerRadius,
+      cutoutOriginalPath: cutoutOriginalPath ?? this.cutoutOriginalPath,
     );
   }
 }

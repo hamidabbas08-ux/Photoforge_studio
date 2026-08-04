@@ -79,6 +79,31 @@ class ProjectFileService {
         }
       }
 
+      final String? cutoutOriginalPath =
+          layerJson['cutoutOriginalPath'] as String?;
+
+      if (cutoutOriginalPath != null && cutoutOriginalPath.isNotEmpty) {
+        final File originalFile = File(cutoutOriginalPath);
+
+        if (await originalFile.exists()) {
+          final String layerId = (layerJson['id'] as String? ?? 'layer_$index')
+              .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '_');
+
+          final String extension = _fileExtension(cutoutOriginalPath);
+
+          final File savedOriginal = File(
+            '${assetsDirectory.path}/'
+            '${index}_${layerId}_cutout_original$extension',
+          );
+
+          if (originalFile.absolute.path != savedOriginal.absolute.path) {
+            await originalFile.copy(savedOriginal.path);
+          }
+
+          layerJson['cutoutOriginalPath'] = savedOriginal.path;
+        }
+      }
+
       savedLayers.add(layerJson);
     }
 

@@ -196,6 +196,7 @@ class LayerController extends ChangeNotifier {
   void updateLayerImagePath({
     required String layerId,
     required String imagePath,
+    String? cutoutOriginalPath,
   }) {
     final EditorLayer? layer = _layerById(layerId);
 
@@ -205,7 +206,11 @@ class LayerController extends ChangeNotifier {
 
     _updateLayer(
       layerId,
-      (EditorLayer currentLayer) => currentLayer.copyWith(imagePath: imagePath),
+      (EditorLayer currentLayer) => currentLayer.copyWith(
+        imagePath: imagePath,
+        cutoutOriginalPath:
+            cutoutOriginalPath ?? currentLayer.cutoutOriginalPath,
+      ),
     );
   }
 
