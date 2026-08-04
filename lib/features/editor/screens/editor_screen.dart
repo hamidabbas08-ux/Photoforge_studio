@@ -57,6 +57,12 @@ class _EditorScreenState extends State<EditorScreen> {
   double _brightness = 0;
   double _contrast = 0;
   double _saturation = 0;
+  double _exposure = 0;
+  double _highlights = 0;
+  double _shadows = 0;
+  double _temperature = 0;
+  double _tint = 0;
+  double _vignette = 0;
   String _selectedFilterId = 'original';
 
   int _quarterTurns = 0;
@@ -163,6 +169,12 @@ class _EditorScreenState extends State<EditorScreen> {
     _brightness = project.brightness;
     _contrast = project.contrast;
     _saturation = project.saturation;
+    _exposure = project.exposure;
+    _highlights = project.highlights;
+    _shadows = project.shadows;
+    _temperature = project.temperature;
+    _tint = project.tint;
+    _vignette = project.vignette;
     _selectedFilterId = project.filterId;
     _quarterTurns = project.quarterTurns;
     _flipHorizontal = project.flipHorizontal;
@@ -1433,6 +1445,12 @@ class _EditorScreenState extends State<EditorScreen> {
       brightness: _brightness,
       contrast: _contrast,
       saturation: _saturation,
+      exposure: _exposure,
+      highlights: _highlights,
+      shadows: _shadows,
+      temperature: _temperature,
+      tint: _tint,
+      vignette: _vignette,
       filterId: _selectedFilterId,
       quarterTurns: _quarterTurns,
       flipHorizontal: _flipHorizontal,
@@ -1728,6 +1746,11 @@ class _EditorScreenState extends State<EditorScreen> {
                   brightness: _brightness,
                   contrast: _contrast,
                   saturation: _saturation,
+                  exposure: _exposure,
+                  highlights: _highlights,
+                  shadows: _shadows,
+                  temperature: _temperature,
+                  tint: _tint,
                 ),
                 PhotoFilterPreset.byId(_selectedFilterId).previewMatrix,
               ),
@@ -2085,40 +2108,140 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Widget _buildAdjustPanel() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+      height: 310,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       decoration: const BoxDecoration(
         color: AppTheme.surface,
         border: Border(top: BorderSide(color: Colors.white10)),
       ),
       child: Column(
         children: [
-          _AdjustmentSlider(
-            label: 'Brightness',
-            value: _brightness,
-            onChangeStart: (_) => _recordHistory(),
-            onChanged: (value) {
-              setState(() => _brightness = value);
-            },
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Professional Adjustments',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _resetAdjustments,
+                icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                label: const Text('Reset'),
+              ),
+            ],
           ),
-          _AdjustmentSlider(
-            label: 'Contrast',
-            value: _contrast,
-            onChangeStart: (_) => _recordHistory(),
-            onChanged: (value) {
-              setState(() => _contrast = value);
-            },
-          ),
-          _AdjustmentSlider(
-            label: 'Saturation',
-            value: _saturation,
-            onChangeStart: (_) => _recordHistory(),
-            onChanged: (value) {
-              setState(() => _saturation = value);
-            },
+          Expanded(
+            child: ListView(
+              children: [
+                _AdjustmentSlider(
+                  label: 'Brightness',
+                  value: _brightness,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _brightness = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Contrast',
+                  value: _contrast,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _contrast = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Saturation',
+                  value: _saturation,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _saturation = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Exposure',
+                  value: _exposure,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _exposure = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Highlights',
+                  value: _highlights,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _highlights = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Shadows',
+                  value: _shadows,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _shadows = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Temperature',
+                  value: _temperature,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _temperature = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Tint',
+                  value: _tint,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _tint = value);
+                  },
+                ),
+                _AdjustmentSlider(
+                  label: 'Vignette',
+                  value: _vignette,
+                  min: 0,
+                  max: 100,
+                  onChangeStart: (_) => _recordHistory(),
+                  onChanged: (double value) {
+                    setState(() => _vignette = value);
+                  },
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
+  }
+
+  void _resetAdjustments() {
+    if (_brightness == 0 &&
+        _contrast == 0 &&
+        _saturation == 0 &&
+        _exposure == 0 &&
+        _highlights == 0 &&
+        _shadows == 0 &&
+        _temperature == 0 &&
+        _tint == 0 &&
+        _vignette == 0) {
+      return;
+    }
+
+    _recordHistory();
+
+    setState(() {
+      _brightness = 0;
+      _contrast = 0;
+      _saturation = 0;
+      _exposure = 0;
+      _highlights = 0;
+      _shadows = 0;
+      _temperature = 0;
+      _tint = 0;
+      _vignette = 0;
+    });
   }
 
   Widget _buildFiltersPanel() {
@@ -3305,8 +3428,22 @@ class _EditorScreenState extends State<EditorScreen> {
     required double brightness,
     required double contrast,
     required double saturation,
+    required double exposure,
+    required double highlights,
+    required double shadows,
+    required double temperature,
+    required double tint,
   }) {
     final double brightnessOffset = brightness * 2.55;
+    final double exposureOffset = exposure * 1.65;
+    final double shadowOffset = shadows * 0.72;
+    final double highlightOffset = highlights * 0.42;
+
+    final double temperatureRed = temperature * 0.52;
+    final double temperatureBlue = -temperature * 0.52;
+    final double tintGreen = -tint * 0.34;
+    final double tintRedBlue = tint * 0.17;
+
     final double contrastValue = 1 + (contrast / 100);
     final double saturationValue = 1 + (saturation / 100);
 
@@ -3346,17 +3483,34 @@ class _EditorScreenState extends State<EditorScreen> {
       0,
       0,
       0,
-      contrastOffset + brightnessOffset,
+      contrastOffset +
+          brightnessOffset +
+          exposureOffset +
+          shadowOffset +
+          highlightOffset +
+          temperatureRed +
+          tintRedBlue,
       0,
       contrastValue,
       0,
       0,
-      contrastOffset + brightnessOffset,
+      contrastOffset +
+          brightnessOffset +
+          exposureOffset +
+          shadowOffset +
+          highlightOffset +
+          tintGreen,
       0,
       0,
       contrastValue,
       0,
-      contrastOffset + brightnessOffset,
+      contrastOffset +
+          brightnessOffset +
+          exposureOffset +
+          shadowOffset +
+          highlightOffset +
+          temperatureBlue +
+          tintRedBlue,
       0,
       0,
       0,
@@ -3511,12 +3665,16 @@ class _AdjustmentSlider extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.onChangeStart,
+    this.min = -100,
+    this.max = 100,
   });
 
   final String label;
   final double value;
   final ValueChanged<double> onChanged;
   final ValueChanged<double> onChangeStart;
+  final double min;
+  final double max;
 
   @override
   Widget build(BuildContext context) {
@@ -3532,8 +3690,8 @@ class _AdjustmentSlider extends StatelessWidget {
         Expanded(
           child: Slider(
             value: value,
-            min: -100,
-            max: 100,
+            min: min,
+            max: max,
             onChangeStart: onChangeStart,
             onChanged: onChanged,
           ),

@@ -10,6 +10,12 @@ class PhotoForgeProject {
     required this.brightness,
     required this.contrast,
     required this.saturation,
+    required this.exposure,
+    required this.highlights,
+    required this.shadows,
+    required this.temperature,
+    required this.tint,
+    required this.vignette,
     required this.filterId,
     required this.quarterTurns,
     required this.flipHorizontal,
@@ -30,6 +36,12 @@ class PhotoForgeProject {
   final double brightness;
   final double contrast;
   final double saturation;
+  final double exposure;
+  final double highlights;
+  final double shadows;
+  final double temperature;
+  final double tint;
+  final double vignette;
   final String filterId;
 
   final int quarterTurns;
@@ -51,6 +63,12 @@ class PhotoForgeProject {
       'brightness': brightness,
       'contrast': contrast,
       'saturation': saturation,
+      'exposure': exposure,
+      'highlights': highlights,
+      'shadows': shadows,
+      'temperature': temperature,
+      'tint': tint,
+      'vignette': vignette,
       'filterId': filterId,
       'quarterTurns': quarterTurns,
       'flipHorizontal': flipHorizontal,
@@ -84,6 +102,12 @@ class PhotoForgeProject {
       brightness: (json['brightness'] as num?)?.toDouble() ?? 0,
       contrast: (json['contrast'] as num?)?.toDouble() ?? 0,
       saturation: (json['saturation'] as num?)?.toDouble() ?? 0,
+      exposure: (json['exposure'] as num?)?.toDouble() ?? 0,
+      highlights: (json['highlights'] as num?)?.toDouble() ?? 0,
+      shadows: (json['shadows'] as num?)?.toDouble() ?? 0,
+      temperature: (json['temperature'] as num?)?.toDouble() ?? 0,
+      tint: (json['tint'] as num?)?.toDouble() ?? 0,
+      vignette: (json['vignette'] as num?)?.toDouble() ?? 0,
       filterId: json['filterId'] as String? ?? 'original',
       quarterTurns: (json['quarterTurns'] as num?)?.toInt() ?? 0,
       flipHorizontal: json['flipHorizontal'] as bool? ?? false,
