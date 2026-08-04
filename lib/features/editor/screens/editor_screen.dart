@@ -18,6 +18,7 @@ import '../layers/screens/drawing_layer_editor.dart';
 import '../layers/screens/selected_layer_eraser_screen.dart';
 import '../layers/services/layer_detail_service.dart';
 import '../layers/services/shape_layer_service.dart';
+import '../layers/services/smart_background_removal_service.dart';
 import '../layers/services/text_layer_service.dart';
 import '../layers/widgets/layer_blend_mask.dart';
 
@@ -50,6 +51,9 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isCreatingDrawingLayer = false;
   bool _isProcessingLayerDetail = false;
   bool _isOpeningLayerEraser = false;
+  bool _isRemovingBackground = false;
+  double _cutoutTolerance = 42;
+  double _cutoutSoftness = 18;
   double _detailBlurRadius = 0;
   double _detailSharpenAmount = 0;
   Size _lastCanvasSize = Size.zero;
@@ -1101,6 +1105,63 @@ class _EditorScreenState extends State<EditorScreen> {
       ShapeLayerKind.line => 'Line',
       ShapeLayerKind.arrow => 'Arrow',
     };
+  }
+
+  Future<void> _removeSelectedLayerBackground() async {
+    final EditorLayer? selectedLayer = _layerController.selectedLayer;
+
+    final String? imagePath = selectedLayer?.imagePath;
+
+    if (selectedLayer == null ||
+        imagePath == null ||
+        imagePath.isEmpty ||
+        selectedLayer.isLocked ||
+        _isRemovingBackground) {
+      return;
+    }
+
+    setState(() => _isRemovingBackground = true);
+
+    try {
+      final File outputFile = await SmartBackgroundRemovalService.instance
+          .removeBackground(
+            sourcePath: imagePath,
+            tolerance: _cutoutTolerance,
+            softness: _cutoutSoftness,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.updateLayerImagePath(
+          layerId: selectedLayer.id,
+          imagePath: outputFile.path,
+        ),
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Background removed. Use Manual Eraser to refine edges.',
+          ),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Background could not be removed: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRemovingBackground = false);
+      }
+    }
   }
 
   Future<void> _openSelectedLayerEraser() async {
@@ -2791,26 +2852,25 @@ class _EditorScreenState extends State<EditorScreen> {
         !selectedLayer.isLocked;
 
     return Container(
-      height: 92,
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      height: 228,
+      padding: const EdgeInsets.fromLTRB(14, 8, 14, 10),
       decoration: const BoxDecoration(
         color: AppTheme.surface,
         border: Border(top: BorderSide(color: Colors.white10)),
       ),
       child: usable
-          ? Row(
+          ? Column(
               children: [
-                const Icon(
-                  Icons.auto_fix_normal_rounded,
-                  color: AppTheme.primary,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.content_cut_rounded,
+                      color: AppTheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
                         'Selected: ${selectedLayer.name}',
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -2818,35 +2878,137 @@ class _EditorScreenState extends State<EditorScreen> {
                           fontSize: 12,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Erase or restore parts of this layer.',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 11,
+                    ),
+                    const Text(
+                      'Smart Offline Cutout',
+                      style: TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 78,
+                      child: Text('Tolerance', style: TextStyle(fontSize: 11)),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: _cutoutTolerance,
+                        min: 10,
+                        max: 140,
+                        divisions: 26,
+                        label: _cutoutTolerance.round().toString(),
+                        onChanged: _isRemovingBackground
+                            ? null
+                            : (double value) {
+                                setState(() {
+                                  _cutoutTolerance = value;
+                                });
+                              },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 32,
+                      child: Text(
+                        _cutoutTolerance.round().toString(),
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    const SizedBox(
+                      width: 78,
+                      child: Text('Softness', style: TextStyle(fontSize: 11)),
+                    ),
+                    Expanded(
+                      child: Slider(
+                        value: _cutoutSoftness,
+                        min: 0,
+                        max: 60,
+                        divisions: 20,
+                        label: _cutoutSoftness.round().toString(),
+                        onChanged: _isRemovingBackground
+                            ? null
+                            : (double value) {
+                                setState(() {
+                                  _cutoutSoftness = value;
+                                });
+                              },
+                      ),
+                    ),
+                    SizedBox(
+                      width: 32,
+                      child: Text(
+                        _cutoutSoftness.round().toString(),
+                        textAlign: TextAlign.end,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _isRemovingBackground
+                            ? null
+                            : _removeSelectedLayerBackground,
+                        icon: _isRemovingBackground
+                            ? const SizedBox(
+                                width: 17,
+                                height: 17,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.content_cut_rounded),
+                        label: Text(
+                          _isRemovingBackground
+                              ? 'Removing...'
+                              : 'Remove Background',
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            _isOpeningLayerEraser || _isRemovingBackground
+                            ? null
+                            : _openSelectedLayerEraser,
+                        icon: _isOpeningLayerEraser
+                            ? const SizedBox(
+                                width: 17,
+                                height: 17,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.auto_fix_normal_rounded),
+                        label: const Text('Manual Eraser'),
+                      ),
+                    ),
+                  ],
                 ),
-                FilledButton.icon(
-                  onPressed: _isOpeningLayerEraser
-                      ? null
-                      : _openSelectedLayerEraser,
-                  icon: _isOpeningLayerEraser
-                      ? const SizedBox(
-                          width: 17,
-                          height: 17,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.auto_fix_normal_rounded),
-                  label: const Text('Open Eraser'),
+                const SizedBox(height: 7),
+                const Text(
+                  'Best for plain or studio backgrounds. '
+                  'Use Undo if too much is removed, then lower Tolerance.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 10),
                 ),
               ],
             )
           : const Center(
               child: Text(
-                'Select an unlocked layer before opening the eraser.',
+                'Select an unlocked image layer before using Cutout.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
               ),
