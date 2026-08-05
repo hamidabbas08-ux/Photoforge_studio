@@ -16,6 +16,7 @@ import '../layers/models/editor_layer.dart';
 import '../layers/models/layer_blend_mapper.dart';
 import '../layers/screens/drawing_layer_editor.dart';
 import '../layers/screens/selected_layer_eraser_screen.dart';
+import '../layers/services/background_layer_service.dart';
 import '../layers/services/layer_detail_service.dart';
 import '../layers/services/shape_layer_service.dart';
 import '../layers/services/smart_background_removal_service.dart';
@@ -49,6 +50,7 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isCreatingTextLayer = false;
   bool _isCreatingShapeLayer = false;
   bool _isCreatingDrawingLayer = false;
+  bool _isCreatingBackgroundLayer = false;
   bool _isProcessingLayerDetail = false;
   bool _isOpeningLayerEraser = false;
   bool _isRemovingBackground = false;
@@ -92,6 +94,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _EditorTool('Draw', Icons.brush_rounded),
     _EditorTool('Text', Icons.text_fields_rounded),
     _EditorTool('Shapes', Icons.category_outlined),
+    _EditorTool('Background', Icons.wallpaper_rounded),
     _EditorTool('Eraser', Icons.auto_fix_normal_rounded),
     _EditorTool('Detail', Icons.blur_on_rounded),
     _EditorTool('Layers', Icons.layers_outlined),
@@ -398,6 +401,400 @@ class _EditorScreenState extends State<EditorScreen> {
     } finally {
       if (mounted) {
         setState(() => _isCreatingDrawingLayer = false);
+      }
+    }
+  }
+
+  Future<void> _showSolidBackgroundDialog() async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingBackgroundLayer) {
+      return;
+    }
+
+    Color selectedColor = Colors.white;
+
+    final bool? shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: const Text('Solid Background'),
+              content: SizedBox(
+                width: 380,
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final Color color in <Color>[
+                      Colors.white,
+                      Colors.black,
+                      const Color(0xFFF2F2F2),
+                      const Color(0xFF1A1A1A),
+                      Colors.red,
+                      Colors.orange,
+                      Colors.yellow,
+                      Colors.green,
+                      Colors.cyan,
+                      Colors.blue,
+                      Colors.purple,
+                      Colors.pink,
+                      const Color(0xFF8D6E63),
+                      const Color(0xFF607D8B),
+                    ])
+                      InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            selectedColor = color;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(24),
+                        child: Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color:
+                                  selectedColor.toARGB32() == color.toARGB32()
+                                  ? AppTheme.primary
+                                  : Colors.white24,
+                              width:
+                                  selectedColor.toARGB32() == color.toARGB32()
+                                  ? 3
+                                  : 1,
+                            ),
+                          ),
+                          child: selectedColor.toARGB32() == color.toARGB32()
+                              ? Icon(
+                                  Icons.check_rounded,
+                                  color: color.computeLuminance() > 0.5
+                                      ? Colors.black
+                                      : Colors.white,
+                                )
+                              : null,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add Background'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldCreate != true || !mounted) {
+      return;
+    }
+
+    await _createSolidBackground(selectedColor);
+  }
+
+  Future<void> _createSolidBackground(Color color) async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingBackgroundLayer) {
+      return;
+    }
+
+    setState(() => _isCreatingBackgroundLayer = true);
+
+    try {
+      final File backgroundFile = await BackgroundLayerService.instance
+          .createSolidBackground(
+            canvasWidth: image.width,
+            canvasHeight: image.height,
+            color: color,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.addBackgroundLayer(
+          imagePath: backgroundFile.path,
+          name: 'Solid Background',
+        ),
+      );
+
+      setState(() {
+        _selectedTool = 0;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Solid background added')));
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingBackgroundLayer = false);
+      }
+    }
+  }
+
+  Future<void> _showGradientBackgroundDialog() async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingBackgroundLayer) {
+      return;
+    }
+
+    final List<(Color, Color, Alignment, Alignment, String)> presets =
+        <(Color, Color, Alignment, Alignment, String)>[
+          (
+            const Color(0xFF667EEA),
+            const Color(0xFF764BA2),
+            Alignment.topLeft,
+            Alignment.bottomRight,
+            'Purple Dream',
+          ),
+          (
+            const Color(0xFFFF9966),
+            const Color(0xFFFF5E62),
+            Alignment.topLeft,
+            Alignment.bottomRight,
+            'Sunset',
+          ),
+          (
+            const Color(0xFF00C6FF),
+            const Color(0xFF0072FF),
+            Alignment.topCenter,
+            Alignment.bottomCenter,
+            'Ocean',
+          ),
+          (
+            const Color(0xFF11998E),
+            const Color(0xFF38EF7D),
+            Alignment.topLeft,
+            Alignment.bottomRight,
+            'Emerald',
+          ),
+          (
+            const Color(0xFF232526),
+            const Color(0xFF414345),
+            Alignment.topCenter,
+            Alignment.bottomCenter,
+            'Dark Studio',
+          ),
+          (
+            const Color(0xFFFDFBFB),
+            const Color(0xFFEBEDEE),
+            Alignment.topCenter,
+            Alignment.bottomCenter,
+            'Soft White',
+          ),
+        ];
+
+    int selectedIndex = 0;
+
+    final bool? shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: const Text('Gradient Background'),
+              content: SizedBox(
+                width: 390,
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (int index = 0; index < presets.length; index++)
+                      InkWell(
+                        onTap: () {
+                          setDialogState(() {
+                            selectedIndex = index;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          width: 104,
+                          height: 78,
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: selectedIndex == index
+                                  ? AppTheme.primary
+                                  : Colors.white24,
+                              width: selectedIndex == index ? 3 : 1,
+                            ),
+                          ),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              gradient: LinearGradient(
+                                begin: presets[index].$3,
+                                end: presets[index].$4,
+                                colors: <Color>[
+                                  presets[index].$1,
+                                  presets[index].$2,
+                                ],
+                              ),
+                            ),
+                            child: Align(
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 4,
+                                ),
+                                color: Colors.black45,
+                                child: Text(
+                                  presets[index].$5,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(false);
+                  },
+                  child: const Text('Cancel'),
+                ),
+                FilledButton.icon(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(true);
+                  },
+                  icon: const Icon(Icons.add_rounded),
+                  label: const Text('Add Gradient'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldCreate != true || !mounted) {
+      return;
+    }
+
+    final preset = presets[selectedIndex];
+
+    await _createGradientBackground(
+      startColor: preset.$1,
+      endColor: preset.$2,
+      begin: preset.$3,
+      end: preset.$4,
+      name: preset.$5,
+    );
+  }
+
+  Future<void> _createGradientBackground({
+    required Color startColor,
+    required Color endColor,
+    required Alignment begin,
+    required Alignment end,
+    required String name,
+  }) async {
+    final EditorImage? image = _editorImage;
+
+    if (image == null || _isCreatingBackgroundLayer) {
+      return;
+    }
+
+    setState(() => _isCreatingBackgroundLayer = true);
+
+    try {
+      final File backgroundFile = await BackgroundLayerService.instance
+          .createGradientBackground(
+            canvasWidth: image.width,
+            canvasHeight: image.height,
+            startColor: startColor,
+            endColor: endColor,
+            begin: begin,
+            end: end,
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.addBackgroundLayer(
+          imagePath: backgroundFile.path,
+          name: '$name Background',
+        ),
+      );
+
+      setState(() {
+        _selectedTool = 0;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gradient background added')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCreatingBackgroundLayer = false);
+      }
+    }
+  }
+
+  Future<void> _addGalleryBackground() async {
+    if (_editorImage == null || _isImporting || _isCreatingBackgroundLayer) {
+      return;
+    }
+
+    setState(() => _isImporting = true);
+
+    try {
+      final EditorImage? image = await ImageImportService.instance
+          .pickFromGallery();
+
+      if (!mounted || image == null) {
+        return;
+      }
+
+      _applyLayerAction(
+        () => _layerController.addBackgroundLayer(
+          imagePath: image.path,
+          name: 'Gallery Background',
+        ),
+      );
+
+      setState(() {
+        _selectedTool = 0;
+      });
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Gallery background added')));
+    } finally {
+      if (mounted) {
+        setState(() => _isImporting = false);
       }
     }
   }
@@ -1964,7 +2361,7 @@ class _EditorScreenState extends State<EditorScreen> {
         fit: StackFit.expand,
         children: [
           layerImage,
-          if (selected && (_selectedTool == 0 || _selectedTool == 10))
+          if (selected && (_selectedTool == 0 || _selectedTool == 11))
             IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
@@ -2097,14 +2494,18 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     if (_selectedTool == 8) {
-      return _buildLayerEraserPanel();
+      return _buildBackgroundPanel();
     }
 
     if (_selectedTool == 9) {
-      return _buildLayerDetailPanel();
+      return _buildLayerEraserPanel();
     }
 
     if (_selectedTool == 10) {
+      return _buildLayerDetailPanel();
+    }
+
+    if (_selectedTool == 11) {
       return _buildLayersPanel();
     }
 
@@ -2848,6 +3249,68 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  Widget _buildBackgroundPanel() {
+    final bool enabled =
+        _editorImage != null && !_isCreatingBackgroundLayer && !_isImporting;
+
+    return Container(
+      height: 116,
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: const BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(top: BorderSide(color: Colors.white10)),
+      ),
+      child: Column(
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.wallpaper_rounded, color: AppTheme.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Add a background behind all other layers',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: enabled ? _showSolidBackgroundDialog : null,
+                  icon: const Icon(Icons.format_color_fill_rounded),
+                  label: const Text('Solid'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: enabled ? _showGradientBackgroundDialog : null,
+                  icon: const Icon(Icons.gradient_rounded),
+                  label: const Text('Gradient'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: enabled ? _addGalleryBackground : null,
+                  icon: _isImporting
+                      ? const SizedBox(
+                          width: 17,
+                          height: 17,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.photo_library_outlined),
+                  label: const Text('Gallery'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildLayerEraserPanel() {
     final EditorLayer? selectedLayer = _layerController.selectedLayer;
 
@@ -3443,6 +3906,16 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                     child: layer.imagePath == null
                         ? const CustomPaint(painter: _CheckerboardPainter())
+                        : layer.type == EditorLayerType.background
+                        ? Container(
+                            color: Colors.black45,
+                            alignment: Alignment.center,
+                            child: const Icon(
+                              Icons.wallpaper_rounded,
+                              color: Colors.white,
+                              size: 30,
+                            ),
+                          )
                         : layer.type == EditorLayerType.drawing
                         ? Container(
                             color: Colors.black45,

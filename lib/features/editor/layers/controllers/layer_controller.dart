@@ -37,6 +37,25 @@ class LayerController extends ChangeNotifier {
     notifyListeners();
   }
 
+  EditorLayer addBackgroundLayer({
+    required String imagePath,
+    required String name,
+  }) {
+    final EditorLayer layer = EditorLayer(
+      id: _createLayerId(),
+      name: name,
+      type: EditorLayerType.background,
+      imagePath: imagePath,
+    );
+
+    // Index 0 is rendered first, therefore it stays behind all layers.
+    _layers.insert(0, layer);
+    _selectedLayerId = layer.id;
+    notifyListeners();
+
+    return layer;
+  }
+
   EditorLayer addImageLayer({required String imagePath, String? name}) {
     final EditorLayer layer = EditorLayer(
       id: _createLayerId(),
