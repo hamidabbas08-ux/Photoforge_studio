@@ -48,6 +48,8 @@ class EditorLayer {
     this.shapeStrokeWidth,
     this.shapeCornerRadius,
     this.cutoutOriginalPath,
+    this.backgroundFit,
+    this.backgroundBlur,
   });
 
   final String id;
@@ -81,6 +83,10 @@ class EditorLayer {
   /// Original image retained for Cutout Refine restore mode.
   final String? cutoutOriginalPath;
 
+  /// Background rendering controls for editable backgrounds.
+  final String? backgroundFit;
+  final double? backgroundBlur;
+
   EditorLayer copyWith({
     String? id,
     String? name,
@@ -106,6 +112,8 @@ class EditorLayer {
     double? shapeStrokeWidth,
     double? shapeCornerRadius,
     String? cutoutOriginalPath,
+    String? backgroundFit,
+    double? backgroundBlur,
   }) {
     return EditorLayer(
       id: id ?? this.id,
@@ -133,6 +141,8 @@ class EditorLayer {
       shapeStrokeWidth: shapeStrokeWidth ?? this.shapeStrokeWidth,
       shapeCornerRadius: shapeCornerRadius ?? this.shapeCornerRadius,
       cutoutOriginalPath: cutoutOriginalPath ?? this.cutoutOriginalPath,
+      backgroundFit: backgroundFit ?? this.backgroundFit,
+      backgroundBlur: backgroundBlur ?? this.backgroundBlur,
     );
   }
 }

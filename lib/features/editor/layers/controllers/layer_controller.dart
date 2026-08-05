@@ -233,6 +233,40 @@ class LayerController extends ChangeNotifier {
     );
   }
 
+  void updateBackgroundLayerSettings({
+    required String layerId,
+    String? fit,
+    double? blur,
+  }) {
+    final EditorLayer? layer = _layerById(layerId);
+
+    if (layer == null || layer.isLocked) {
+      return;
+    }
+
+    _updateLayer(
+      layerId,
+      (EditorLayer currentLayer) => currentLayer.copyWith(
+        backgroundFit: fit ?? currentLayer.backgroundFit,
+        backgroundBlur: blur ?? currentLayer.backgroundBlur,
+      ),
+    );
+  }
+
+  void resetBackgroundLayerSettings(String layerId) {
+    final EditorLayer? layer = _layerById(layerId);
+
+    if (layer == null || layer.isLocked) {
+      return;
+    }
+
+    _updateLayer(
+      layerId,
+      (EditorLayer currentLayer) =>
+          currentLayer.copyWith(backgroundFit: 'cover', backgroundBlur: 0),
+    );
+  }
+
   void selectLayer(String layerId) {
     if (!_containsLayer(layerId)) {
       return;

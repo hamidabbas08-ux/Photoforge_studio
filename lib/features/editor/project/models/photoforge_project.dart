@@ -144,6 +144,8 @@ class PhotoForgeProjectLayer {
     this.shapeStrokeWidth,
     this.shapeCornerRadius,
     this.cutoutOriginalPath,
+    this.backgroundFit,
+    this.backgroundBlur,
   });
 
   final String id;
@@ -175,6 +177,8 @@ class PhotoForgeProjectLayer {
   final double? shapeStrokeWidth;
   final double? shapeCornerRadius;
   final String? cutoutOriginalPath;
+  final String? backgroundFit;
+  final double? backgroundBlur;
 
   Map<String, Object?> toJson() {
     return <String, Object?>{
@@ -203,6 +207,8 @@ class PhotoForgeProjectLayer {
       'shapeStrokeWidth': shapeStrokeWidth,
       'shapeCornerRadius': shapeCornerRadius,
       'cutoutOriginalPath': cutoutOriginalPath,
+      'backgroundFit': backgroundFit,
+      'backgroundBlur': backgroundBlur,
     };
   }
 
@@ -235,6 +241,8 @@ class PhotoForgeProjectLayer {
       shapeStrokeWidth: (json['shapeStrokeWidth'] as num?)?.toDouble(),
       shapeCornerRadius: (json['shapeCornerRadius'] as num?)?.toDouble(),
       cutoutOriginalPath: json['cutoutOriginalPath'] as String?,
+      backgroundFit: json['backgroundFit'] as String?,
+      backgroundBlur: (json['backgroundBlur'] as num?)?.toDouble(),
     );
   }
 }

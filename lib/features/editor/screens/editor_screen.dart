@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
@@ -147,6 +148,8 @@ class _EditorScreenState extends State<EditorScreen> {
             shapeStrokeWidth: layer.shapeStrokeWidth,
             shapeCornerRadius: layer.shapeCornerRadius,
             cutoutOriginalPath: layer.cutoutOriginalPath,
+            backgroundFit: layer.backgroundFit,
+            backgroundBlur: layer.backgroundBlur,
           ),
         )
         .toList();
@@ -1904,6 +1907,8 @@ class _EditorScreenState extends State<EditorScreen> {
             shapeStrokeWidth: layer.shapeStrokeWidth,
             shapeCornerRadius: layer.shapeCornerRadius,
             cutoutOriginalPath: layer.cutoutOriginalPath,
+            backgroundFit: layer.backgroundFit,
+            backgroundBlur: layer.backgroundBlur,
           ),
       ],
       brightness: _brightness,
@@ -2304,6 +2309,10 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     final bool selected = layer.id == _layerController.selectedLayerId;
+    final bool isBackground = layer.type == EditorLayerType.background;
+    final BoxFit boxFit = isBackground
+        ? _backgroundBoxFit(layer.backgroundFit)
+        : BoxFit.cover;
 
     Widget layerImage = Transform(
       alignment: Alignment.center,
@@ -2313,7 +2322,7 @@ class _EditorScreenState extends State<EditorScreen> {
         ..scaleByDouble(layer.scaleX, layer.scaleY, 1, 1),
       child: Image.file(
         File(imagePath),
-        fit: BoxFit.cover,
+        fit: boxFit,
         filterQuality: FilterQuality.high,
         gaplessPlayback: true,
         errorBuilder: (context, error, stackTrace) {
@@ -2330,6 +2339,14 @@ class _EditorScreenState extends State<EditorScreen> {
         },
       ),
     );
+
+    if (isBackground && (layer.backgroundBlur ?? 0) > 0) {
+      final double sigma = (layer.backgroundBlur ?? 0).clamp(0, 24) / 3;
+      layerImage = ImageFiltered(
+        imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+        child: layerImage,
+      );
+    }
 
     layerImage = Opacity(
       opacity: layer.opacity.clamp(0.0, 1.0),
@@ -2372,6 +2389,25 @@ class _EditorScreenState extends State<EditorScreen> {
         ],
       ),
     );
+  }
+
+  BoxFit _backgroundBoxFit(String? fit) {
+    switch ((fit ?? 'cover').toLowerCase()) {
+      case 'contain':
+        return BoxFit.contain;
+      case 'fill':
+        return BoxFit.fill;
+      case 'fitwidth':
+        return BoxFit.fitWidth;
+      case 'fitheight':
+        return BoxFit.fitHeight;
+      default:
+        return BoxFit.cover;
+    }
+  }
+
+  double _backgroundScaleValue(EditorLayer layer) {
+    return ((layer.scaleX + layer.scaleY) / 2).clamp(0.1, 4.0);
   }
 
   Widget _buildToolPanel() {
@@ -2990,6 +3026,191 @@ class _EditorScreenState extends State<EditorScreen> {
                                 },
                           icon: const Icon(Icons.edit_rounded),
                           label: const Text('Edit Shape'),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    if (currentLayer.type == EditorLayerType.background) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceLight,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Background Controls',
+                              style: TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 12),
+                            DropdownButtonFormField<String>(
+                              initialValue:
+                                  currentLayer.backgroundFit ?? 'cover',
+                              decoration: InputDecoration(
+                                labelText: 'Fit',
+                                filled: true,
+                                fillColor: AppTheme.surface,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: 'cover',
+                                  child: Text('Cover'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'contain',
+                                  child: Text('Contain'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'fill',
+                                  child: Text('Fill'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'fitWidth',
+                                  child: Text('Fit Width'),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'fitHeight',
+                                  child: Text('Fit Height'),
+                                ),
+                              ],
+                              onChanged: currentLayer.isLocked
+                                  ? null
+                                  : (String? value) {
+                                      if (value == null) return;
+                                      _applyLayerAction(
+                                        () => _layerController
+                                            .updateBackgroundLayerSettings(
+                                              layerId: currentLayer.id,
+                                              fit: value,
+                                            ),
+                                      );
+                                    },
+                            ),
+                            const SizedBox(height: 8),
+                            _AdjustmentSlider(
+                              label: 'Blur',
+                              value: (currentLayer.backgroundBlur ?? 0).clamp(
+                                0,
+                                24,
+                              ),
+                              min: 0,
+                              max: 24,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController
+                                          .updateBackgroundLayerSettings(
+                                            layerId: currentLayer.id,
+                                            blur: value,
+                                          );
+                                    },
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Scale',
+                              value: _backgroundScaleValue(currentLayer) * 100,
+                              min: 10,
+                              max: 400,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      final double scale = (value / 100).clamp(
+                                        0.1,
+                                        4.0,
+                                      );
+                                      _layerController.setLayerTransform(
+                                        layerId: currentLayer.id,
+                                        offset: currentLayer.offset,
+                                        scaleX: scale,
+                                        scaleY: scale,
+                                        rotation: currentLayer.rotation,
+                                      );
+                                    },
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Pos X',
+                              value: currentLayer.offset.dx.clamp(-600, 600),
+                              min: -600,
+                              max: 600,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController.setLayerTransform(
+                                        layerId: currentLayer.id,
+                                        offset: Offset(
+                                          value,
+                                          currentLayer.offset.dy,
+                                        ),
+                                        scaleX: currentLayer.scaleX,
+                                        scaleY: currentLayer.scaleY,
+                                        rotation: currentLayer.rotation,
+                                      );
+                                    },
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Pos Y',
+                              value: currentLayer.offset.dy.clamp(-600, 600),
+                              min: -600,
+                              max: 600,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController.setLayerTransform(
+                                        layerId: currentLayer.id,
+                                        offset: Offset(
+                                          currentLayer.offset.dx,
+                                          value,
+                                        ),
+                                        scaleX: currentLayer.scaleX,
+                                        scaleY: currentLayer.scaleY,
+                                        rotation: currentLayer.rotation,
+                                      );
+                                    },
+                            ),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: currentLayer.isLocked
+                                    ? null
+                                    : () {
+                                        _applyLayerAction(() {
+                                          _layerController.resetLayerTransform(
+                                            currentLayer.id,
+                                          );
+                                          _layerController
+                                              .resetBackgroundLayerSettings(
+                                                currentLayer.id,
+                                              );
+                                        });
+                                      },
+                                icon: const Icon(Icons.wallpaper_rounded),
+                                label: const Text('Reset Background Controls'),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 20),
