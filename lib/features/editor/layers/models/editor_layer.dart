@@ -50,6 +50,12 @@ class EditorLayer {
     this.cutoutOriginalPath,
     this.backgroundFit,
     this.backgroundBlur,
+    this.shadowEnabled,
+    this.shadowOpacity,
+    this.shadowBlur,
+    this.shadowOffsetX,
+    this.shadowOffsetY,
+    this.shadowScale,
   });
 
   final String id;
@@ -87,6 +93,14 @@ class EditorLayer {
   final String? backgroundFit;
   final double? backgroundBlur;
 
+  /// Soft shadow rendered behind non-background layers.
+  final bool? shadowEnabled;
+  final double? shadowOpacity;
+  final double? shadowBlur;
+  final double? shadowOffsetX;
+  final double? shadowOffsetY;
+  final double? shadowScale;
+
   EditorLayer copyWith({
     String? id,
     String? name,
@@ -114,6 +128,12 @@ class EditorLayer {
     String? cutoutOriginalPath,
     String? backgroundFit,
     double? backgroundBlur,
+    bool? shadowEnabled,
+    double? shadowOpacity,
+    double? shadowBlur,
+    double? shadowOffsetX,
+    double? shadowOffsetY,
+    double? shadowScale,
   }) {
     return EditorLayer(
       id: id ?? this.id,
@@ -143,6 +163,12 @@ class EditorLayer {
       cutoutOriginalPath: cutoutOriginalPath ?? this.cutoutOriginalPath,
       backgroundFit: backgroundFit ?? this.backgroundFit,
       backgroundBlur: backgroundBlur ?? this.backgroundBlur,
+      shadowEnabled: shadowEnabled ?? this.shadowEnabled,
+      shadowOpacity: shadowOpacity ?? this.shadowOpacity,
+      shadowBlur: shadowBlur ?? this.shadowBlur,
+      shadowOffsetX: shadowOffsetX ?? this.shadowOffsetX,
+      shadowOffsetY: shadowOffsetY ?? this.shadowOffsetY,
+      shadowScale: shadowScale ?? this.shadowScale,
     );
   }
 }

@@ -267,6 +267,58 @@ class LayerController extends ChangeNotifier {
     );
   }
 
+  void updateLayerShadow({
+    required String layerId,
+    bool? enabled,
+    double? opacity,
+    double? blur,
+    double? offsetX,
+    double? offsetY,
+    double? scale,
+  }) {
+    final EditorLayer? layer = _layerById(layerId);
+
+    if (layer == null ||
+        layer.isLocked ||
+        layer.type == EditorLayerType.background) {
+      return;
+    }
+
+    _updateLayer(
+      layerId,
+      (EditorLayer currentLayer) => currentLayer.copyWith(
+        shadowEnabled: enabled ?? currentLayer.shadowEnabled,
+        shadowOpacity: opacity ?? currentLayer.shadowOpacity,
+        shadowBlur: blur ?? currentLayer.shadowBlur,
+        shadowOffsetX: offsetX ?? currentLayer.shadowOffsetX,
+        shadowOffsetY: offsetY ?? currentLayer.shadowOffsetY,
+        shadowScale: scale ?? currentLayer.shadowScale,
+      ),
+    );
+  }
+
+  void resetLayerShadow(String layerId) {
+    final EditorLayer? layer = _layerById(layerId);
+
+    if (layer == null ||
+        layer.isLocked ||
+        layer.type == EditorLayerType.background) {
+      return;
+    }
+
+    _updateLayer(
+      layerId,
+      (EditorLayer currentLayer) => currentLayer.copyWith(
+        shadowEnabled: false,
+        shadowOpacity: 0.35,
+        shadowBlur: 18,
+        shadowOffsetX: 0,
+        shadowOffsetY: 24,
+        shadowScale: 1,
+      ),
+    );
+  }
+
   void selectLayer(String layerId) {
     if (!_containsLayer(layerId)) {
       return;

@@ -234,6 +234,49 @@ String _processAndExportImage(Map<String, Object?> request) {
         (((canvasHeight - layerImage.height) / 2) + (offsetY * positionScaleY))
             .round();
 
+    final bool shadowEnabled = layer['shadowEnabled'] as bool? ?? false;
+
+    if (shadowEnabled) {
+      final double shadowOpacity =
+          (layer['shadowOpacity'] as num?)?.toDouble().clamp(0.0, 1.0) ?? 0.35;
+
+      final double shadowBlur =
+          (layer['shadowBlur'] as num?)?.toDouble().clamp(0.0, 60.0) ?? 18;
+
+      final double shadowOffsetX =
+          (layer['shadowOffsetX'] as num?)?.toDouble() ?? 0;
+
+      final double shadowOffsetY =
+          (layer['shadowOffsetY'] as num?)?.toDouble() ?? 24;
+
+      final double shadowScale =
+          (layer['shadowScale'] as num?)?.toDouble().clamp(0.5, 2.0) ?? 1;
+
+      img.Image shadowImage = _createSoftShadowImage(
+        layerImage,
+        opacity: shadowOpacity,
+        blur: shadowBlur,
+        scale: shadowScale,
+      );
+
+      final int shadowX =
+          destinationX +
+          (shadowOffsetX * positionScaleX).round() -
+          ((shadowImage.width - layerImage.width) / 2).round();
+
+      final int shadowY =
+          destinationY +
+          (shadowOffsetY * positionScaleY).round() -
+          ((shadowImage.height - layerImage.height) / 2).round();
+
+      composition = img.compositeImage(
+        composition,
+        shadowImage,
+        dstX: shadowX,
+        dstY: shadowY,
+      );
+    }
+
     composition = img.compositeImage(
       composition,
       layerImage,
@@ -342,6 +385,44 @@ img.Image _coverImageToCanvas(
     width: math.min(canvasWidth, resized.width),
     height: math.min(canvasHeight, resized.height),
   );
+}
+
+img.Image _createSoftShadowImage(
+  img.Image source, {
+  required double opacity,
+  required double blur,
+  required double scale,
+}) {
+  img.Image shadow = img.Image.from(source);
+
+  for (final img.Pixel pixel in shadow) {
+    final double alpha = pixel.aNormalized * opacity.clamp(0.0, 1.0);
+
+    pixel
+      ..r = 0
+      ..g = 0
+      ..b = 0
+      ..aNormalized = alpha;
+  }
+
+  final double safeScale = scale.clamp(0.5, 2.0);
+
+  if ((safeScale - 1).abs() > 0.001) {
+    shadow = img.copyResize(
+      shadow,
+      width: math.max(1, (shadow.width * safeScale).round()),
+      height: math.max(1, (shadow.height * safeScale).round()),
+      interpolation: img.Interpolation.cubic,
+    );
+  }
+
+  final int radius = (blur / 3).round().clamp(0, 20);
+
+  if (radius > 0) {
+    shadow = img.gaussianBlur(shadow, radius: radius);
+  }
+
+  return shadow;
 }
 
 void _applyOpacity(img.Image image, double opacity) {

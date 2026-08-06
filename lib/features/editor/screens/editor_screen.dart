@@ -150,6 +150,12 @@ class _EditorScreenState extends State<EditorScreen> {
             cutoutOriginalPath: layer.cutoutOriginalPath,
             backgroundFit: layer.backgroundFit,
             backgroundBlur: layer.backgroundBlur,
+            shadowEnabled: layer.shadowEnabled,
+            shadowOpacity: layer.shadowOpacity,
+            shadowBlur: layer.shadowBlur,
+            shadowOffsetX: layer.shadowOffsetX,
+            shadowOffsetY: layer.shadowOffsetY,
+            shadowScale: layer.shadowScale,
           ),
         )
         .toList();
@@ -1781,6 +1787,12 @@ class _EditorScreenState extends State<EditorScreen> {
               'scaleX': layer.scaleX,
               'scaleY': layer.scaleY,
               'rotation': layer.rotation,
+              'shadowEnabled': layer.shadowEnabled ?? false,
+              'shadowOpacity': layer.shadowOpacity ?? 0.35,
+              'shadowBlur': layer.shadowBlur ?? 18,
+              'shadowOffsetX': layer.shadowOffsetX ?? 0,
+              'shadowOffsetY': layer.shadowOffsetY ?? 24,
+              'shadowScale': layer.shadowScale ?? 1,
             },
         ],
         previewCanvasWidth: _lastCanvasSize.width,
@@ -1909,6 +1921,12 @@ class _EditorScreenState extends State<EditorScreen> {
             cutoutOriginalPath: layer.cutoutOriginalPath,
             backgroundFit: layer.backgroundFit,
             backgroundBlur: layer.backgroundBlur,
+            shadowEnabled: layer.shadowEnabled,
+            shadowOpacity: layer.shadowOpacity,
+            shadowBlur: layer.shadowBlur,
+            shadowOffsetX: layer.shadowOffsetX,
+            shadowOffsetY: layer.shadowOffsetY,
+            shadowScale: layer.shadowScale,
           ),
       ],
       brightness: _brightness,
@@ -2309,18 +2327,15 @@ class _EditorScreenState extends State<EditorScreen> {
     }
 
     final bool selected = layer.id == _layerController.selectedLayerId;
+
     final bool isBackground = layer.type == EditorLayerType.background;
+
     final BoxFit boxFit = isBackground
         ? _backgroundBoxFit(layer.backgroundFit)
         : BoxFit.cover;
 
-    Widget layerImage = Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()
-        ..translateByDouble(layer.offset.dx, layer.offset.dy, 0, 1)
-        ..rotateZ(layer.rotation)
-        ..scaleByDouble(layer.scaleX, layer.scaleY, 1, 1),
-      child: Image.file(
+    Widget buildTransformedImage() {
+      Widget image = Image.file(
         File(imagePath),
         fit: boxFit,
         filterQuality: FilterQuality.high,
@@ -2337,16 +2352,28 @@ class _EditorScreenState extends State<EditorScreen> {
             ),
           );
         },
-      ),
-    );
+      );
 
-    if (isBackground && (layer.backgroundBlur ?? 0) > 0) {
-      final double sigma = (layer.backgroundBlur ?? 0).clamp(0, 24) / 3;
-      layerImage = ImageFiltered(
-        imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-        child: layerImage,
+      if (isBackground && (layer.backgroundBlur ?? 0) > 0) {
+        final double sigma = (layer.backgroundBlur ?? 0).clamp(0, 24) / 3;
+
+        image = ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+          child: image,
+        );
+      }
+
+      return Transform(
+        alignment: Alignment.center,
+        transform: Matrix4.identity()
+          ..translateByDouble(layer.offset.dx, layer.offset.dy, 0, 1)
+          ..rotateZ(layer.rotation)
+          ..scaleByDouble(layer.scaleX, layer.scaleY, 1, 1),
+        child: image,
       );
     }
+
+    Widget layerImage = buildTransformedImage();
 
     layerImage = Opacity(
       opacity: layer.opacity.clamp(0.0, 1.0),
@@ -2373,10 +2400,52 @@ class _EditorScreenState extends State<EditorScreen> {
       );
     }
 
+    Widget? shadow;
+
+    if (!isBackground &&
+        (layer.shadowEnabled ?? false) &&
+        (layer.shadowOpacity ?? 0.35) > 0) {
+      final double shadowBlur = (layer.shadowBlur ?? 18).clamp(0, 60);
+
+      final double shadowScale = (layer.shadowScale ?? 1).clamp(0.5, 2);
+
+      Widget shadowImage = ColorFiltered(
+        colorFilter: const ColorFilter.mode(Colors.black, BlendMode.srcIn),
+        child: buildTransformedImage(),
+      );
+
+      shadowImage = Transform.translate(
+        offset: Offset(layer.shadowOffsetX ?? 0, layer.shadowOffsetY ?? 24),
+        child: Transform.scale(
+          alignment: Alignment.center,
+          scaleX: shadowScale,
+          scaleY: shadowScale,
+          child: shadowImage,
+        ),
+      );
+
+      if (shadowBlur > 0) {
+        shadowImage = ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(
+            sigmaX: shadowBlur / 3,
+            sigmaY: shadowBlur / 3,
+          ),
+          child: shadowImage,
+        );
+      }
+
+      shadow = Opacity(
+        opacity: (layer.shadowOpacity ?? 0.35).clamp(0, 1),
+        child: shadowImage,
+      );
+    }
+
     return Positioned.fill(
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // ignore: use_null_aware_elements
+          if (shadow != null) shadow,
           layerImage,
           if (selected && (_selectedTool == 0 || _selectedTool == 11))
             IgnorePointer(
@@ -3208,6 +3277,152 @@ class _EditorScreenState extends State<EditorScreen> {
                                       },
                                 icon: const Icon(Icons.wallpaper_rounded),
                                 label: const Text('Reset Background Controls'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+
+                    if (currentLayer.type != EditorLayerType.background) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.surfaceLight,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Expanded(
+                                  child: Text(
+                                    'Subject Soft Shadow',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                ),
+                                Switch(
+                                  value: currentLayer.shadowEnabled ?? false,
+                                  onChanged: currentLayer.isLocked
+                                      ? null
+                                      : (bool value) {
+                                          _applyLayerAction(
+                                            () => _layerController
+                                                .updateLayerShadow(
+                                                  layerId: currentLayer.id,
+                                                  enabled: value,
+                                                ),
+                                          );
+                                        },
+                                ),
+                              ],
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Opacity',
+                              value: (currentLayer.shadowOpacity ?? 0.35) * 100,
+                              min: 0,
+                              max: 100,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController.updateLayerShadow(
+                                        layerId: currentLayer.id,
+                                        opacity: value / 100,
+                                      );
+                                    },
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Blur',
+                              value: currentLayer.shadowBlur ?? 18,
+                              min: 0,
+                              max: 60,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController.updateLayerShadow(
+                                        layerId: currentLayer.id,
+                                        blur: value,
+                                      );
+                                    },
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Offset X',
+                              value: currentLayer.shadowOffsetX ?? 0,
+                              min: -200,
+                              max: 200,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController.updateLayerShadow(
+                                        layerId: currentLayer.id,
+                                        offsetX: value,
+                                      );
+                                    },
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Distance',
+                              value: currentLayer.shadowOffsetY ?? 24,
+                              min: -100,
+                              max: 300,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController.updateLayerShadow(
+                                        layerId: currentLayer.id,
+                                        offsetY: value,
+                                      );
+                                    },
+                            ),
+                            _AdjustmentSlider(
+                              label: 'Scale',
+                              value: (currentLayer.shadowScale ?? 1) * 100,
+                              min: 50,
+                              max: 200,
+                              onChangeStart: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (_) => _recordHistory(),
+                              onChanged: currentLayer.isLocked
+                                  ? (_) {}
+                                  : (double value) {
+                                      _layerController.updateLayerShadow(
+                                        layerId: currentLayer.id,
+                                        scale: value / 100,
+                                      );
+                                    },
+                            ),
+                            const SizedBox(height: 6),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: currentLayer.isLocked
+                                    ? null
+                                    : () {
+                                        _applyLayerAction(
+                                          () =>
+                                              _layerController.resetLayerShadow(
+                                                currentLayer.id,
+                                              ),
+                                        );
+                                      },
+                                icon: const Icon(Icons.restart_alt_rounded),
+                                label: const Text('Reset Subject Shadow'),
                               ),
                             ),
                           ],

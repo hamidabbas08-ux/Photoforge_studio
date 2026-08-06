@@ -146,6 +146,12 @@ class PhotoForgeProjectLayer {
     this.cutoutOriginalPath,
     this.backgroundFit,
     this.backgroundBlur,
+    this.shadowEnabled,
+    this.shadowOpacity,
+    this.shadowBlur,
+    this.shadowOffsetX,
+    this.shadowOffsetY,
+    this.shadowScale,
   });
 
   final String id;
@@ -180,6 +186,13 @@ class PhotoForgeProjectLayer {
   final String? backgroundFit;
   final double? backgroundBlur;
 
+  final bool? shadowEnabled;
+  final double? shadowOpacity;
+  final double? shadowBlur;
+  final double? shadowOffsetX;
+  final double? shadowOffsetY;
+  final double? shadowScale;
+
   Map<String, Object?> toJson() {
     return <String, Object?>{
       'id': id,
@@ -209,6 +222,12 @@ class PhotoForgeProjectLayer {
       'cutoutOriginalPath': cutoutOriginalPath,
       'backgroundFit': backgroundFit,
       'backgroundBlur': backgroundBlur,
+      'shadowEnabled': shadowEnabled,
+      'shadowOpacity': shadowOpacity,
+      'shadowBlur': shadowBlur,
+      'shadowOffsetX': shadowOffsetX,
+      'shadowOffsetY': shadowOffsetY,
+      'shadowScale': shadowScale,
     };
   }
 
@@ -243,6 +262,12 @@ class PhotoForgeProjectLayer {
       cutoutOriginalPath: json['cutoutOriginalPath'] as String?,
       backgroundFit: json['backgroundFit'] as String?,
       backgroundBlur: (json['backgroundBlur'] as num?)?.toDouble(),
+      shadowEnabled: json['shadowEnabled'] as bool?,
+      shadowOpacity: (json['shadowOpacity'] as num?)?.toDouble(),
+      shadowBlur: (json['shadowBlur'] as num?)?.toDouble(),
+      shadowOffsetX: (json['shadowOffsetX'] as num?)?.toDouble(),
+      shadowOffsetY: (json['shadowOffsetY'] as num?)?.toDouble(),
+      shadowScale: (json['shadowScale'] as num?)?.toDouble(),
     );
   }
 }
